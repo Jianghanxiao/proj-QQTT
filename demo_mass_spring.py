@@ -3,7 +3,7 @@ import open3d as o3d
 import numpy as np
 
 
-def get_spring_mass_from_pcd(pcd, raidus=0.05, max_neighbours=11):
+def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20):
     pcd_tree = o3d.geometry.KDTreeFlann(pcd)
     points = np.asarray(pcd.points)
     spring_flags = np.zeros((len(points), len(points)))
@@ -119,7 +119,7 @@ class SpringMassSystem_taichi:
             
             self.forces[idx1] += force
             self.forces[idx2] -= force
-            # # Calculate the damping force
+            # Calculate the damping force
             # v_rel = (self.v[idx2] - self.v[idx1]).dot(d)
             # dashpot_force = self.dashpot_damping * v_rel * d
             # # self.forces[idx1] += dashpot_force
@@ -141,7 +141,7 @@ class SpringMassSystem_taichi:
 def demo1():
     # Load the table into taichi and create a simple spring-mass system
     table = o3d.io.read_point_cloud("data/table.ply")
-    table.translate([0, 0, 0.3])
+    table.translate([0, 0, 0.1])
     # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1)
     # o3d.visualization.draw_geometries([table, coordinate])
     init_vertices, init_springs, init_rest_lengths, init_masses = (
@@ -158,6 +158,22 @@ def demo1():
     vis.create_window()
     vis.add_geometry(lineset)
     vis.add_geometry(pcd)
+    # Define ground plane vertices
+    ground_vertices = np.array([[10, 10, 0],
+                                [10, -10, 0],
+                                [-10, -10, 0],
+                                [-10, 10, 0]])
+
+    # Define ground plane triangular faces
+    ground_triangles = np.array([[0, 2, 1],
+                                [0, 3, 2]])
+
+    # Create Open3D mesh object
+    ground_mesh = o3d.geometry.TriangleMesh()
+    ground_mesh.vertices = o3d.utility.Vector3dVector(ground_vertices)
+    ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)
+    vis.add_geometry(ground_mesh)
+
     
 
 
@@ -179,7 +195,7 @@ def demo1():
 
 
 if __name__ == "__main__":
-    # ti.init(arch=ti.gpu)
-    ti.init(arch=ti.cpu, cpu_max_num_threads=1)
+    ti.init(arch=ti.gpu)
+    # ti.init(arch=ti.cpu, cpu_max_num_threads=1)
 
     demo1()
