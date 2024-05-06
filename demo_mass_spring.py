@@ -1,6 +1,6 @@
-import taichi as ti
 import open3d as o3d
 import numpy as np
+import taichi as ti
 
 
 def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20):
@@ -24,10 +24,16 @@ def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20):
     springs = np.array(springs)
     rest_lengths = np.array(rest_lengths)
     masses = np.ones(len(vertices))
-    return vertices, springs, rest_lengths, masses
+    return (
+        vertices.astype(np.float32),
+        springs.astype(np.int32),
+        rest_lengths.astype(np.float32),
+        masses.astype(np.float32),
+    )
 
 
-def get_spring_mass_visual(vertices, springs, rest_legnths):
+def get_spring_mass_visual(vertices, springs, rest_lengths, factor=50):
+    # The factor is used to scale the force
     # Color the springs with force information
     lineset = o3d.geometry.LineSet()
     lineset.points = o3d.utility.Vector3dVector(vertices)
@@ -35,12 +41,11 @@ def get_spring_mass_visual(vertices, springs, rest_legnths):
     line_colors = [
         np.array([0.0, 1.0, 0.0])
         * np.abs(
-            (
-                1
-                - np.linalg.norm(vertices[springs[i][0]] - vertices[springs[i][1]])
-                / rest_legnths[i]
-            )
+            np.linalg.norm(vertices[springs[i][0]] - vertices[springs[i][1]])
+            - rest_lengths[i]
         )
+        / rest_lengths[i]
+        * factor
         for i in range(len(springs))
     ]
     lineset.colors = o3d.utility.Vector3dVector(line_colors)
@@ -62,7 +67,11 @@ class SpringMassSystem_taichi:
         init_springs,
         init_rest_lengths,
         init_masses,
-        num_substeps=10,
+        dt=5e-5,
+        num_substeps=1000,
+        spring_Y=3e4,
+        dashpot_damping=100,
+        drag_damping=1,
     ):
         # Initialize the vertices and springs
         # Here assume the mass are the same
@@ -79,23 +88,22 @@ class SpringMassSystem_taichi:
         self.masses.from_numpy(init_masses)
         self.forces = ti.Vector.field(3, dtype=ti.f32, shape=self.n_vertices)
 
-        self.dt = 5e-5
+        self.dt = dt
         self.num_substeps = num_substeps
-        self.spring_Y = 3e4
-        self.dashpot_damping = 1e4
-        self.drag_damping = 1
+        self.spring_Y = spring_Y
+        self.dashpot_damping = dashpot_damping
+        self.drag_damping = drag_damping
 
     def step(self):
         for i in range(self.num_substeps):
             self.substep()
-        
+
         return self.x.to_numpy(), self.springs.to_numpy(), self.rest_lengths.to_numpy()
 
     @ti.func
     def clear_forces(self):
         for i in self.forces:
             self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
-        
 
     @ti.kernel
     def substep(self):
@@ -111,19 +119,15 @@ class SpringMassSystem_taichi:
             dis = x2 - x1
             d = dis.normalized()
             # Calculate the spring force
-            force = (
-                self.spring_Y
-                * (dis.norm() / self.rest_lengths[idx_spring] - 1)
-                * d
-            )
-            
+            force = self.spring_Y * (dis.norm() / self.rest_lengths[idx_spring] - 1) * d
+
             self.forces[idx1] += force
             self.forces[idx2] -= force
             # Calculate the damping force
-            # v_rel = (self.v[idx2] - self.v[idx1]).dot(d)
-            # dashpot_force = self.dashpot_damping * v_rel * d
-            # # self.forces[idx1] += dashpot_force
-            # self.forces[idx2] -= dashpot_force
+            v_rel = (self.v[idx2] - self.v[idx1]).dot(d)
+            dashpot_force = self.dashpot_damping * v_rel * d
+            self.forces[idx1] += dashpot_force
+            self.forces[idx2] -= dashpot_force
 
         for idx_vertice in range(self.n_vertices):
             self.v[idx_vertice] += (
@@ -147,7 +151,9 @@ def demo1():
     init_vertices, init_springs, init_rest_lengths, init_masses = (
         get_spring_mass_from_pcd(table)
     )
-    lineset, pcd = get_spring_mass_visual(init_vertices, init_springs, init_rest_lengths)
+    lineset, pcd = get_spring_mass_visual(
+        init_vertices, init_springs, init_rest_lengths
+    )
     # o3d.visualization.draw_geometries(visuals)
 
     mySystem = SpringMassSystem_taichi(
@@ -159,23 +165,16 @@ def demo1():
     vis.add_geometry(lineset)
     vis.add_geometry(pcd)
     # Define ground plane vertices
-    ground_vertices = np.array([[10, 10, 0],
-                                [10, -10, 0],
-                                [-10, -10, 0],
-                                [-10, 10, 0]])
+    ground_vertices = np.array([[10, 10, 0], [10, -10, 0], [-10, -10, 0], [-10, 10, 0]])
 
     # Define ground plane triangular faces
-    ground_triangles = np.array([[0, 2, 1],
-                                [0, 3, 2]])
+    ground_triangles = np.array([[0, 2, 1], [0, 3, 2]])
 
     # Create Open3D mesh object
     ground_mesh = o3d.geometry.TriangleMesh()
     ground_mesh.vertices = o3d.utility.Vector3dVector(ground_vertices)
     ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)
     vis.add_geometry(ground_mesh)
-
-    
-
 
     for i in range(3000):
         vertices, springs, rest_lengths = mySystem.step()
