@@ -70,7 +70,7 @@ class SpringMassSystem_taichi:
         spring_Y=3e4,
         dashpot_damping=100,
         drag_damping=1,
-        break_force_limit=None,
+        break_force_limit=200000,
     ):
         # Initialize the vertices and springs
         # Here assume the mass are the same
@@ -176,30 +176,30 @@ def demo1():
     )
     # o3d.visualization.draw_geometries(visuals)
 
-    # For spring setting
-    mySystem = SpringMassSystem_taichi(
-        init_vertices,
-        init_springs,
-        init_rest_lengths,
-        init_masses,
-        dt=5e-5,
-        num_substeps=1000,
-        spring_Y=3e4,
-        dashpot_damping=100,
-        drag_damping=1,
-    )
-    # # For fake rigid setting
+    # # For spring setting
     # mySystem = SpringMassSystem_taichi(
     #     init_vertices,
     #     init_springs,
     #     init_rest_lengths,
     #     init_masses,
-    #     dt=5e-6,
+    #     dt=5e-5,
     #     num_substeps=1000,
-    #     spring_Y=3e6,
+    #     spring_Y=3e4,
     #     dashpot_damping=100,
-    #     drag_damping=10,
+    #     drag_damping=1,
     # )
+    # For fake rigid setting
+    mySystem = SpringMassSystem_taichi(
+        init_vertices,
+        init_springs,
+        init_rest_lengths,
+        init_masses,
+        dt=5e-6,
+        num_substeps=1000,
+        spring_Y=3e6,
+        dashpot_damping=100,
+        drag_damping=10,
+    )
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -240,7 +240,7 @@ def demo1():
 def demo2():
     # Test the breaking phenomenon
     # Load the table into taichi and create a simple spring-mass system
-    table = o3d.io.read_point_cloud("data/teddy.ply")
+    table = o3d.io.read_point_cloud("data/table.ply")
     table.translate([0, 0, 0.1])
     # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1)
     # o3d.visualization.draw_geometries([table, coordinate])
@@ -269,6 +269,20 @@ def demo2():
         drag_damping=1,
         break_force_limit=1500,
     )
+
+    # # For fake rigid setting
+    # mySystem = SpringMassSystem_taichi(
+    #     init_vertices,
+    #     init_springs,
+    #     init_rest_lengths,
+    #     init_masses,
+    #     dt=5e-6,
+    #     num_substeps=1000,
+    #     spring_Y=3e6,
+    #     dashpot_damping=100,
+    #     drag_damping=10,
+    #     break_force_limit=1500,
+    # )
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -311,5 +325,5 @@ if __name__ == "__main__":
     ti.init(arch=ti.gpu)
     # ti.init(arch=ti.cpu, cpu_max_num_threads=1)
 
-    # demo1()
-    demo2()
+    demo1()
+    # demo2()
