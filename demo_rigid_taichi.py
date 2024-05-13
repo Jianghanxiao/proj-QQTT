@@ -31,7 +31,15 @@ def SetToRotate(q):
 @ti.data_oriented
 class RigidObjectSimulator:
     def __init__(
-        self, center, r, init_masses, dt=5e-5, num_substeps=1000, drag_damping=1
+        self,
+        center,
+        r,
+        init_masses,
+        dt=5e-5,
+        num_substeps=100,
+        drag_damping=1,
+        collide_elas=0.2,
+        collide_fric=0.3,
     ):
         # Initialize the vertices
         # Here assume the mass are the same
@@ -61,6 +69,9 @@ class RigidObjectSimulator:
         self.dt = dt
         self.num_substeps = num_substeps
         self.drag_damping = drag_damping
+        # Parameters for collision
+        self.collide_elas = collide_elas
+        self.collide_fric = collide_fric
 
     @ti.kernel
     def _init_rigid_attributes(self):
@@ -98,7 +109,7 @@ class RigidObjectSimulator:
         # Process the translation
         for idx_vertice in range(self.n_vertices):
             self.forces[idx_vertice] += (
-                ti.Vector([0.0, 0.0, -0.1]) * self.masses[idx_vertice]
+                ti.Vector([0.0, 0.0, -9.8]) * self.masses[idx_vertice]
             )
             self.total_force[0] += self.forces[idx_vertice]
         self.v[0] += self.total_force[0] * self.dt / self.total_mass[0]
@@ -138,20 +149,114 @@ class RigidObjectSimulator:
 
         # Apply the drag damping
         decreasing_ratio = math.exp(-self.dt * self.drag_damping)
-        print(decreasing_ratio)
         self.v[0] *= decreasing_ratio
         self.omega[0] *= decreasing_ratio
 
+    # @ti.func
+    # def process_collision(self):
+    #     # Deprecated. avg position doesn't work
+    #     avg_r = ti.Vector([0.0, 0.0, 0.0])
+    #     num_vertices = 0
+    #     for idx_vertice in range(self.n_vertices):
+    #         vertice = self.center[0] + self.r[idx_vertice]
+    #         if vertice[2] < 0:
+    #             ti.atomic_add(avg_r, vertice)
+    #             ti.atomic_add(num_vertices, 1)
+
+    #     if num_vertices > 0:
+    #         avg_r /= num_vertices
+    #         print("!!!!")
+    #         print(avg_r, num_vertices)
+    #         normal = ti.Vector([0.0, 0.0, 1.0])
+
+    #         v_i = self.v[0] + self.omega[0].cross(avg_r)
+    #         print(v_i)
+    #         print(v_i.dot(normal))
+    #         if v_i.dot(normal) < 0:
+    #             v_normal = v_i.dot(normal) * normal
+    #             v_tao = v_i - v_normal
+
+    #             v_normal_new = -self.collide_elas * v_normal
+    #             a = ti.max(
+    #                 0.0,
+    #                 1
+    #                 - self.collide_fric
+    #                 * (1 + self.collide_elas)
+    #                 * v_normal.norm()
+    #                 / v_tao.norm(),
+    #             )
+    #             v_tao_new = a * v_tao
+    #             v_i_new = v_normal_new + v_tao_new
+    #             print(v_i, v_i_new)
+
+    #             avg_r_matrix = ti.Matrix(
+    #                 [
+    #                     [0.0, -avg_r.z, avg_r.y],
+    #                     [avg_r.z, 0.0, -avg_r.x],
+    #                     [-avg_r.y, avg_r.x, 0.0],
+    #                 ]
+    #             )
+
+    #             K = (
+    #                 1 / self.total_mass[0] * ti.Matrix.identity(ti.f32, 3)
+    #                 - avg_r_matrix @ self.inertia[0].inverse() @ avg_r_matrix
+    #             )
+
+    #             j = K.inverse() @ (v_i_new - v_i)
+
+    #             self.v[0] += j / self.total_mass[0] * num_vertices
+    #             self.omega[0] += self.inertia[0].inverse() @ avg_r_matrix @ j * num_vertices
+
     @ti.func
     def process_collision(self):
-        pass
+        normal = ti.Vector([0.0, 0.0, 1.0])
+        for idx_vertice in range(self.n_vertices):
+            vertice = self.center[0] + self.r[idx_vertice]
+            r_i = self.r[idx_vertice]
+            v_i = self.v[0] + self.omega[0].cross(r_i)
+            if vertice[2] < 0 and v_i.dot(normal) < 0:
+                print(v_i)
+                print(v_i.dot(normal))
+
+                v_normal = v_i.dot(normal) * normal
+                v_tao = v_i - v_normal
+
+                v_normal_new = -self.collide_elas * v_normal
+                a = ti.max(
+                    0.0,
+                    1
+                    - self.collide_fric
+                    * (1 + self.collide_elas)
+                    * v_normal.norm()
+                    / v_tao.norm(),
+                )
+                v_tao_new = a * v_tao
+                v_i_new = v_normal_new + v_tao_new
+
+                r_matrix = ti.Matrix(
+                    [
+                        [0.0, -r_i.z, r_i.y],
+                        [r_i.z, 0.0, -r_i.x],
+                        [-r_i.y, r_i.x, 0.0],
+                    ]
+                )
+
+                K = (
+                    1 / self.total_mass[0] * ti.Matrix.identity(ti.f32, 3)
+                    - r_matrix @ self.inertia[0].inverse() @ r_matrix
+                )
+
+                j = K.inverse() @ (v_i_new - v_i)
+
+                self.v[0] += j / self.total_mass[0]
+                self.omega[0] += self.inertia[0].inverse() @ r_matrix @ j
 
 
 def demo1():
     # Test my rigid-object simulator
     # Load the table into taichi and create a simple spring-mass system
     table = o3d.io.read_point_cloud("data/table.ply")
-    table.translate([0, 0, 0.1])
+    table.translate([0, 0, 3])
 
     init_vertices = np.asarray(table.points).astype(np.float32)
     center = init_vertices.mean(axis=0)
@@ -205,7 +310,7 @@ def demo1():
 
 if __name__ == "__main__":
     # ti.init(arch=ti.gpu)
-    ti.init(arch=ti.cpu)
-    # ti.init(arch=ti.cpu, cpu_max_num_threads=1)
+    # ti.init(arch=ti.cpu)
+    ti.init(arch=ti.cpu, cpu_max_num_threads=1)
 
     demo1()
