@@ -152,110 +152,63 @@ class RigidObjectSimulator:
         self.v[0] *= decreasing_ratio
         self.omega[0] *= decreasing_ratio
 
-    # @ti.func
-    # def process_collision(self):
-    #     # Deprecated. avg position doesn't work
-    #     avg_r = ti.Vector([0.0, 0.0, 0.0])
-    #     num_vertices = 0
-    #     for idx_vertice in range(self.n_vertices):
-    #         vertice = self.center[0] + self.r[idx_vertice]
-    #         if vertice[2] < 0:
-    #             ti.atomic_add(avg_r, vertice)
-    #             ti.atomic_add(num_vertices, 1)
-
-    #     if num_vertices > 0:
-    #         avg_r /= num_vertices
-    #         print("!!!!")
-    #         print(avg_r, num_vertices)
-    #         normal = ti.Vector([0.0, 0.0, 1.0])
-
-    #         v_i = self.v[0] + self.omega[0].cross(avg_r)
-    #         print(v_i)
-    #         print(v_i.dot(normal))
-    #         if v_i.dot(normal) < 0:
-    #             v_normal = v_i.dot(normal) * normal
-    #             v_tao = v_i - v_normal
-
-    #             v_normal_new = -self.collide_elas * v_normal
-    #             a = ti.max(
-    #                 0.0,
-    #                 1
-    #                 - self.collide_fric
-    #                 * (1 + self.collide_elas)
-    #                 * v_normal.norm()
-    #                 / v_tao.norm(),
-    #             )
-    #             v_tao_new = a * v_tao
-    #             v_i_new = v_normal_new + v_tao_new
-    #             print(v_i, v_i_new)
-
-    #             avg_r_matrix = ti.Matrix(
-    #                 [
-    #                     [0.0, -avg_r.z, avg_r.y],
-    #                     [avg_r.z, 0.0, -avg_r.x],
-    #                     [-avg_r.y, avg_r.x, 0.0],
-    #                 ]
-    #             )
-
-    #             K = (
-    #                 1 / self.total_mass[0] * ti.Matrix.identity(ti.f32, 3)
-    #                 - avg_r_matrix @ self.inertia[0].inverse() @ avg_r_matrix
-    #             )
-
-    #             j = K.inverse() @ (v_i_new - v_i)
-
-    #             self.v[0] += j / self.total_mass[0] * num_vertices
-    #             self.omega[0] += self.inertia[0].inverse() @ avg_r_matrix @ j * num_vertices
-
     @ti.func
     def process_collision(self):
+        # Deprecated. avg position doesn't work
+        avg_r = ti.Vector([0.0, 0.0, 0.0])
+        num_vertices = 0
         normal = ti.Vector([0.0, 0.0, 1.0])
         for idx_vertice in range(self.n_vertices):
             vertice = self.center[0] + self.r[idx_vertice]
-            r_i = self.r[idx_vertice]
-            v_i = self.v[0] + self.omega[0].cross(r_i)
+            v_i = self.v[0] + self.omega[0].cross(self.r[idx_vertice])
             if vertice[2] < 0 and v_i.dot(normal) < 0:
-                print(v_i)
-                print(v_i.dot(normal))
+                avg_r += self.r[idx_vertice]
+                num_vertices += 1
 
-                v_normal = v_i.dot(normal) * normal
-                v_tao = v_i - v_normal
+        if num_vertices > 0:
+            avg_r /= num_vertices
 
-                v_normal_new = -self.collide_elas * v_normal
-                a = ti.max(
-                    0.0,
-                    1
-                    - self.collide_fric
-                    * (1 + self.collide_elas)
-                    * v_normal.norm()
-                    / v_tao.norm(),
-                )
-                v_tao_new = a * v_tao
-                v_i_new = v_normal_new + v_tao_new
+            v_i = self.v[0] + self.omega[0].cross(avg_r)
 
-                r_matrix = ti.Matrix(
-                    [
-                        [0.0, -r_i.z, r_i.y],
-                        [r_i.z, 0.0, -r_i.x],
-                        [-r_i.y, r_i.x, 0.0],
-                    ]
-                )
+            v_normal = v_i.dot(normal) * normal
+            v_tao = v_i - v_normal
 
-                K = (
-                    1 / self.total_mass[0] * ti.Matrix.identity(ti.f32, 3)
-                    - r_matrix @ self.inertia[0].inverse() @ r_matrix
-                )
+            v_normal_new = -self.collide_elas * v_normal
+            a = ti.max(
+                0.0,
+                1
+                - self.collide_fric
+                * (1 + self.collide_elas)
+                * v_normal.norm()
+                / v_tao.norm(),
+            )
+            v_tao_new = a * v_tao
+            v_i_new = v_normal_new + v_tao_new
 
-                j = K.inverse() @ (v_i_new - v_i)
+            avg_r_matrix = ti.Matrix(
+                [
+                    [0.0, -avg_r.z, avg_r.y],
+                    [avg_r.z, 0.0, -avg_r.x],
+                    [-avg_r.y, avg_r.x, 0.0],
+                ]
+            )
 
-                self.v[0] += j / self.total_mass[0]
-                self.omega[0] += self.inertia[0].inverse() @ r_matrix @ j
+            K = (
+                1 / self.total_mass[0] * ti.Matrix.identity(ti.f32, 3)
+                - avg_r_matrix @ self.inertia[0].inverse() @ avg_r_matrix
+            )
 
+            j = K.inverse() @ (v_i_new - v_i)
+
+            self.v[0] += j / self.total_mass[0] 
+            self.omega[0] += self.inertia[0].inverse() @ avg_r_matrix @ j
 
 def demo1():
     # Test my rigid-object simulator
     # Load the table into taichi and create a simple spring-mass system
-    table = o3d.io.read_point_cloud("data/table.ply")
+    table = o3d.io.read_point_cloud("data/teddy.ply")
+    # R = table.get_rotation_matrix_from_xyz((np.pi , 0, 0))
+    # table.rotate(R, center=(0, 0, 0))
     table.translate([0, 0, 3])
 
     init_vertices = np.asarray(table.points).astype(np.float32)
