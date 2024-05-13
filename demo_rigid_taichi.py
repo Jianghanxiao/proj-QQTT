@@ -1,6 +1,7 @@
 import open3d as o3d
 import numpy as np
 import taichi as ti
+import math
 
 
 @ti.func
@@ -92,6 +93,8 @@ class RigidObjectSimulator:
     @ti.kernel
     def substep(self):
         self.clear_forces()
+        # Process the collision
+        self.process_collision()
         # Process the translation
         for idx_vertice in range(self.n_vertices):
             self.forces[idx_vertice] += (
@@ -132,6 +135,12 @@ class RigidObjectSimulator:
         self.inertia[0] = (
             self.rot_inc[0] @ self.inertia[0] @ self.rot_inc[0].transpose()
         )
+
+        # Apply the drag damping
+        decreasing_ratio = math.exp(-self.dt * self.drag_damping)
+        print(decreasing_ratio)
+        self.v[0] *= decreasing_ratio
+        self.omega[0] *= decreasing_ratio
 
     @ti.func
     def process_collision(self):
