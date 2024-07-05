@@ -300,10 +300,13 @@ def demo1():
     ground_mesh.vertices = o3d.utility.Vector3dVector(ground_vertices)
     ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)
     ground_mesh.paint_uniform_color([1, 211 / 255, 139 / 255])
-    vis.add_geometry(ground_mesh)
+    vis.add_geometry(ground_mesh)   
 
-    for i in range(3000):
+    points_trajectories = []
+
+    for i in range(50):
         points = mySystem.step()
+        points_trajectories.append(points)
         # print(spring_forces.min(), spring_forces.max(), spring_forces.mean(), np.median(spring_forces))
         pcd.points = o3d.utility.Vector3dVector(points)
         vis.update_geometry(pcd)
@@ -313,7 +316,11 @@ def demo1():
         # import pdb
         # pdb.set_trace()
     vis.destroy_window()
-    pass
+
+    # Save points_trajectories to a npy file
+    points_trajectories = np.array(points_trajectories)
+    points_trajectories = np.transpose(points_trajectories, (1, 0, 2))
+    np.save("points_trajectories_rigid.npy", points_trajectories)
 
 
 if __name__ == "__main__":

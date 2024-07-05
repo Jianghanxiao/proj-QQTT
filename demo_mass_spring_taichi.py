@@ -176,30 +176,30 @@ def demo1():
     )
     # o3d.visualization.draw_geometries(visuals)
 
-    # # For spring setting
-    # mySystem = SpringMassSystem_taichi(
-    #     init_vertices,
-    #     init_springs,
-    #     init_rest_lengths,
-    #     init_masses,
-    #     dt=5e-5,
-    #     num_substeps=1000,
-    #     spring_Y=3e4,
-    #     dashpot_damping=100,
-    #     drag_damping=1,
-    # )
-    # For fake rigid setting
+    # For spring setting
     mySystem = SpringMassSystem_taichi(
         init_vertices,
         init_springs,
         init_rest_lengths,
         init_masses,
-        dt=5e-6,
+        dt=5e-5,
         num_substeps=1000,
-        spring_Y=3e6,
+        spring_Y=3e4,
         dashpot_damping=100,
-        drag_damping=10,
+        drag_damping=1,
     )
+    # # For fake rigid setting
+    # mySystem = SpringMassSystem_taichi(
+    #     init_vertices,
+    #     init_springs,
+    #     init_rest_lengths,
+    #     init_masses,
+    #     dt=5e-6,
+    #     num_substeps=1000,
+    #     spring_Y=3e6,
+    #     dashpot_damping=100,
+    #     drag_damping=10,
+    # )
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -218,8 +218,11 @@ def demo1():
     ground_mesh.paint_uniform_color([1, 211 / 255, 139 / 255])
     vis.add_geometry(ground_mesh)
 
-    for i in range(3000):
+    points_trajectories = []
+
+    for i in range(80):
         vertices, springs, rest_lengths, spring_forces, spring_isbreak = mySystem.step()
+        points_trajectories.append(vertices)
         new_lineset, new_pcd = get_spring_mass_visual(
             vertices, springs, rest_lengths, spring_forces, spring_isbreak
         )
@@ -236,6 +239,10 @@ def demo1():
         # pdb.set_trace()
     vis.destroy_window()
 
+    # Save points_trajectories to a npy file
+    points_trajectories = np.array(points_trajectories)
+    points_trajectories = np.transpose(points_trajectories, (1, 0, 2))
+    np.save("points_trajectories_spring.npy", points_trajectories)
 
 def demo2():
     # Test the breaking phenomenon
