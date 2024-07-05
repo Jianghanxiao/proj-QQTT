@@ -261,7 +261,7 @@ class RigidObjectSimulator:
 def demo1():
     # Test my rigid-object simulator
     # Load the table into taichi and create a simple spring-mass system
-    table = o3d.io.read_point_cloud("data/table.ply")
+    table = o3d.io.read_point_cloud("taichi_simulator_test/data/table.ply")
     # R = table.get_rotation_matrix_from_xyz((np.pi, 0, 0))
     # table.rotate(R, center=(0, 0, 0))
     table.translate([0, 0, 3])
