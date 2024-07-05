@@ -320,7 +320,7 @@ def demo1():
     # Save points_trajectories to a npy file
     points_trajectories = np.array(points_trajectories)
     points_trajectories = np.transpose(points_trajectories, (1, 0, 2))
-    np.save("points_trajectories_rigid.npy", points_trajectories)
+    np.save("taichi_simulator_test/points_trajectories_rigid.npy", points_trajectories)
 
 
 if __name__ == "__main__":
