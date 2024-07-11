@@ -1,4 +1,4 @@
-# The test simulator for spring-mass system using Taichi
+# Test the mass-spring system with partial/full connection for rigid object
 
 import open3d as o3d
 import numpy as np
@@ -23,6 +23,16 @@ def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20):
                 spring_flags[j, i] = 1
                 springs.append([i, j])
                 rest_lengths.append(np.linalg.norm(points[i] - points[j]))
+
+    for i in range(len(vertices)):
+        # randomly select 10 points to connect
+        for j in range(1):
+            idx = np.random.randint(i, len(vertices))
+            if i == idx or spring_flags[i, idx] == 1:
+                continue
+            springs.append([i, idx])
+            rest_lengths.append(np.linalg.norm(points[i] - points[idx]))
+
     springs = np.array(springs)
     rest_lengths = np.array(rest_lengths)
     masses = np.ones(len(vertices))
@@ -169,7 +179,9 @@ class SpringMassSystem_taichi:
 
 def demo1():
     # Load the table into taichi and create a simple spring-mass system
-    table = o3d.io.read_point_cloud("taichi_simulator_test/data/table.ply")
+    table = o3d.io.read_point_cloud(
+        "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/table.ply"
+    )
     table.translate([0, 0, 0.1])
     # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1)
     # o3d.visualization.draw_geometries([table, coordinate])
@@ -248,99 +260,9 @@ def demo1():
         # pdb.set_trace()
     vis.destroy_window()
 
-    # Save points_trajectories to a npy file
-    points_trajectories = np.array(points_trajectories)
-    points_trajectories = np.transpose(points_trajectories, (1, 0, 2))
-    np.save("taichi_simulator_test/points_trajectories_spring.npy", points_trajectories)
-
-
-def demo2():
-    # Test the breaking phenomenon
-    # Load the table into taichi and create a simple spring-mass system
-    table = o3d.io.read_point_cloud("data/table.ply")
-    table.translate([0, 0, 0.1])
-    # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1)
-    # o3d.visualization.draw_geometries([table, coordinate])
-    init_vertices, init_springs, init_rest_lengths, init_masses = (
-        get_spring_mass_from_pcd(table)
-    )
-    lineset, pcd = get_spring_mass_visual(
-        init_vertices,
-        init_springs,
-        init_rest_lengths,
-        spring_forces=np.zeros(len(init_springs)),
-        spring_isbreak=np.zeros(len(init_springs)),
-    )
-    # o3d.visualization.draw_geometries(visuals)
-
-    # For spring setting
-    mySystem = SpringMassSystem_taichi(
-        init_vertices,
-        init_springs,
-        init_rest_lengths,
-        init_masses,
-        dt=5e-5,
-        num_substeps=1000,
-        spring_Y=3e4,
-        dashpot_damping=100,
-        drag_damping=1,
-        break_force_limit=1500,
-    )
-
-    # # For fake rigid setting
-    # mySystem = SpringMassSystem_taichi(
-    #     init_vertices,
-    #     init_springs,
-    #     init_rest_lengths,
-    #     init_masses,
-    #     dt=5e-6,
-    #     num_substeps=1000,
-    #     spring_Y=3e6,
-    #     dashpot_damping=100,
-    #     drag_damping=10,
-    #     break_force_limit=1500,
-    # )
-
-    vis = o3d.visualization.Visualizer()
-    vis.create_window()
-    vis.add_geometry(lineset)
-    vis.add_geometry(pcd)
-    # Define ground plane vertices
-    ground_vertices = np.array([[10, 10, 0], [10, -10, 0], [-10, -10, 0], [-10, 10, 0]])
-
-    # Define ground plane triangular faces
-    ground_triangles = np.array([[0, 2, 1], [0, 3, 2]])
-
-    # Create Open3D mesh object
-    ground_mesh = o3d.geometry.TriangleMesh()
-    ground_mesh.vertices = o3d.utility.Vector3dVector(ground_vertices)
-    ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)
-    ground_mesh.paint_uniform_color([1, 211 / 255, 139 / 255])
-    vis.add_geometry(ground_mesh)
-
-    for i in range(3000):
-        vertices, springs, rest_lengths, spring_forces, spring_isbreak = mySystem.step()
-        # print(spring_forces.min(), spring_forces.max(), spring_forces.mean(), np.median(spring_forces))
-        new_lineset, new_pcd = get_spring_mass_visual(
-            vertices, springs, rest_lengths, spring_forces, spring_isbreak
-        )
-        lineset.points = new_lineset.points
-        lineset.lines = new_lineset.lines
-        lineset.colors = new_lineset.colors
-        pcd.points = new_pcd.points
-        vis.update_geometry(lineset)
-        vis.update_geometry(pcd)
-
-        vis.poll_events()
-        vis.update_renderer()
-        # import pdb
-        # pdb.set_trace()
-    vis.destroy_window()
-
 
 if __name__ == "__main__":
     ti.init(arch=ti.gpu)
     # ti.init(arch=ti.cpu, cpu_max_num_threads=1)
 
     demo1()
-    # demo2()

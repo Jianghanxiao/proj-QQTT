@@ -1,3 +1,5 @@
+# The test script for the rigid object simulator implemented in Taichi
+
 import open3d as o3d
 import numpy as np
 import taichi as ti
