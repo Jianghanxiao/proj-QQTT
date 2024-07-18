@@ -169,8 +169,10 @@ class SpringMassSystem_taichi:
 
 def demo1():
     # Load the table into taichi and create a simple spring-mass system
-    table = o3d.io.read_point_cloud("taichi_simulator_test/data/table.ply")
-    table.translate([0, 0, 0.1])
+    table = o3d.io.read_point_cloud(
+        "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/table.ply"
+    )
+    table.translate([0, 0, 0.3])
     # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1)
     # o3d.visualization.draw_geometries([table, coordinate])
     init_vertices, init_springs, init_rest_lengths, init_masses = (
@@ -186,29 +188,29 @@ def demo1():
     # o3d.visualization.draw_geometries(visuals)
 
     # For spring setting
-    mySystem = SpringMassSystem_taichi(
-        init_vertices,
-        init_springs,
-        init_rest_lengths,
-        init_masses,
-        dt=5e-5,
-        num_substeps=1000,
-        spring_Y=3e4,
-        dashpot_damping=100,
-        drag_damping=1,
-    )
-    # # For fake rigid setting
     # mySystem = SpringMassSystem_taichi(
     #     init_vertices,
     #     init_springs,
     #     init_rest_lengths,
     #     init_masses,
-    #     dt=5e-6,
+    #     dt=5e-5,
     #     num_substeps=1000,
-    #     spring_Y=3e6,
+    #     spring_Y=3e4,
     #     dashpot_damping=100,
-    #     drag_damping=10,
+    #     drag_damping=1,
     # )
+    # For fake rigid setting
+    mySystem = SpringMassSystem_taichi(
+        init_vertices,
+        init_springs,
+        init_rest_lengths,
+        init_masses,
+        dt=5e-6,
+        num_substeps=1000,
+        spring_Y=3e6,
+        dashpot_damping=100,
+        drag_damping=10,
+    )
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -227,9 +229,14 @@ def demo1():
     ground_mesh.paint_uniform_color([1, 211 / 255, 139 / 255])
     vis.add_geometry(ground_mesh)
 
+    view_control = vis.get_view_control()
+    view_control.set_front([-1, 0, 0.5])
+    view_control.set_up([0, 0, 1])
+    view_control.set_zoom(3)
+
     points_trajectories = []
 
-    for i in range(80):
+    for i in range(800):
         vertices, springs, rest_lengths, spring_forces, spring_isbreak = mySystem.step()
         points_trajectories.append(vertices)
         new_lineset, new_pcd = get_spring_mass_visual(
@@ -251,7 +258,7 @@ def demo1():
     # Save points_trajectories to a npy file
     points_trajectories = np.array(points_trajectories)
     points_trajectories = np.transpose(points_trajectories, (1, 0, 2))
-    np.save("taichi_simulator_test/points_trajectories_spring.npy", points_trajectories)
+    # np.save("taichi_simulator_test/points_trajectories_spring.npy", points_trajectories)
 
 
 def demo2():

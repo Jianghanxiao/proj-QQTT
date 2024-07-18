@@ -26,7 +26,7 @@ def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20):
 
     for i in range(len(vertices)):
         # randomly select 10 points to connect
-        for j in range(1):
+        for j in range(5):
             idx = np.random.randint(i, len(vertices))
             if i == idx or spring_flags[i, idx] == 1:
                 continue
@@ -182,7 +182,7 @@ def demo1():
     table = o3d.io.read_point_cloud(
         "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/table.ply"
     )
-    table.translate([0, 0, 0.1])
+    table.translate([0, 0, 3])
     # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1)
     # o3d.visualization.draw_geometries([table, coordinate])
     init_vertices, init_springs, init_rest_lengths, init_masses = (
@@ -207,7 +207,7 @@ def demo1():
         num_substeps=1000,
         spring_Y=3e4,
         dashpot_damping=100,
-        drag_damping=1,
+        drag_damping=10,
     )
     # # For fake rigid setting
     # mySystem = SpringMassSystem_taichi(
@@ -238,6 +238,11 @@ def demo1():
     ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)
     ground_mesh.paint_uniform_color([1, 211 / 255, 139 / 255])
     vis.add_geometry(ground_mesh)
+
+    view_control = vis.get_view_control()
+    view_control.set_front([-1, 0, 0.5])
+    view_control.set_up([0, 0, 1])
+    view_control.set_zoom(3)
 
     points_trajectories = []
 

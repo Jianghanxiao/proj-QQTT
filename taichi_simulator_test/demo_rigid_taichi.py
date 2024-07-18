@@ -263,10 +263,12 @@ class RigidObjectSimulator:
 def demo1():
     # Test my rigid-object simulator
     # Load the table into taichi and create a simple spring-mass system
-    table = o3d.io.read_point_cloud("taichi_simulator_test/data/table.ply")
+    table = o3d.io.read_point_cloud(
+        "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/table.ply"
+    )
     # R = table.get_rotation_matrix_from_xyz((np.pi, 0, 0))
     # table.rotate(R, center=(0, 0, 0))
-    table.translate([0, 0, 3])
+    table.translate([0, 0, 2])
 
     init_vertices = np.asarray(table.points).astype(np.float32)
     center = init_vertices.mean(axis=0)
@@ -280,17 +282,17 @@ def demo1():
         init_masses,
         dt=5e-5,
         num_substeps=1000,
-        drag_damping=1,
+        drag_damping=0,
     )
 
     # Construct the visualizer
     vis = o3d.visualization.Visualizer()
     vis.create_window()
     vis.add_geometry(pcd)
-    coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(
-        size=1, origin=[0, 0, 0]
-    )
-    vis.add_geometry(coordinate)
+    # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(
+    #     size=1, origin=[0, 0, 0]
+    # )
+    # vis.add_geometry(coordinate)
     # Define ground plane vertices
     ground_vertices = np.array([[10, 10, 0], [10, -10, 0], [-10, -10, 0], [-10, 10, 0]])
 
@@ -302,7 +304,12 @@ def demo1():
     ground_mesh.vertices = o3d.utility.Vector3dVector(ground_vertices)
     ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)
     ground_mesh.paint_uniform_color([1, 211 / 255, 139 / 255])
-    vis.add_geometry(ground_mesh)   
+    vis.add_geometry(ground_mesh)
+
+    view_control = vis.get_view_control()
+    view_control.set_front([-1, 0, 0.5])
+    view_control.set_up([0, 0, 1])
+    view_control.set_zoom(3)
 
     points_trajectories = []
 
@@ -322,7 +329,7 @@ def demo1():
     # Save points_trajectories to a npy file
     points_trajectories = np.array(points_trajectories)
     points_trajectories = np.transpose(points_trajectories, (1, 0, 2))
-    np.save("taichi_simulator_test/points_trajectories_rigid.npy", points_trajectories)
+    # np.save("taichi_simulator_test/points_trajectories_rigid.npy", points_trajectories)
 
 
 if __name__ == "__main__":
