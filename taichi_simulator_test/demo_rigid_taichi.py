@@ -214,12 +214,14 @@ class RigidObjectSimulator:
         normal = ti.Vector([0.0, 0.0, 1.0])
         v_inc = ti.Vector([0.0, 0.0, 0.0])
         omega_inc = ti.Vector([0.0, 0.0, 0.0])
+        x_avg = 0.0
         num_vertices = 0
         for idx_vertice in range(self.n_vertices):
             vertice = self.center[0] + self.r[idx_vertice]
             r_i = self.r[idx_vertice]
             v_i = self.v[0] + self.omega[0].cross(r_i)
             if vertice[2] < 0 and v_i.dot(normal) < 0:
+                x_avg += -vertice[2]
                 num_vertices += 1
                 v_normal = v_i.dot(normal) * normal
                 v_tao = v_i - v_normal
@@ -258,6 +260,8 @@ class RigidObjectSimulator:
             # print(v_inc, omega_inc)
             self.v[0] += v_inc / num_vertices
             self.omega[0] += omega_inc / num_vertices
+            self.center[0] += normal * x_avg / num_vertices
+        # print(num_vertices)
 
 
 def demo1():
@@ -313,7 +317,7 @@ def demo1():
 
     points_trajectories = []
 
-    for i in range(50):
+    for i in range(5000):
         points = mySystem.step()
         points_trajectories.append(points)
         # print(spring_forces.min(), spring_forces.max(), spring_forces.mean(), np.median(spring_forces))
