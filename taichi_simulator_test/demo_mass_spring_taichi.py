@@ -188,29 +188,29 @@ def demo1():
     # o3d.visualization.draw_geometries(visuals)
 
     # For spring setting
-    # mySystem = SpringMassSystem_taichi(
-    #     init_vertices,
-    #     init_springs,
-    #     init_rest_lengths,
-    #     init_masses,
-    #     dt=5e-5,
-    #     num_substeps=1000,
-    #     spring_Y=3e4,
-    #     dashpot_damping=100,
-    #     drag_damping=1,
-    # )
-    # For fake rigid setting
     mySystem = SpringMassSystem_taichi(
         init_vertices,
         init_springs,
         init_rest_lengths,
         init_masses,
-        dt=5e-6,
+        dt=5e-5,
         num_substeps=1000,
-        spring_Y=3e6,
+        spring_Y=3e4,
         dashpot_damping=100,
-        drag_damping=10,
+        drag_damping=1,
     )
+    # # For fake rigid setting
+    # mySystem = SpringMassSystem_taichi(
+    #     init_vertices,
+    #     init_springs,
+    #     init_rest_lengths,
+    #     init_masses,
+    #     dt=5e-6,
+    #     num_substeps=1000,
+    #     spring_Y=3e6,
+    #     dashpot_damping=100,
+    #     drag_damping=10,
+    # )
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()

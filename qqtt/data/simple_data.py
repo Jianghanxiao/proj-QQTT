@@ -21,12 +21,10 @@ class SimpleData:
     def visualize_data(self):
         visualize_pc(
             self.data,
-            FPS=10,
             visualize=True,
         )
         visualize_pc(
             self.data,
-            FPS=10,
             visualize=False,
             save_video=True,
             save_path=f"{self.base_dir}/gt.mp4",

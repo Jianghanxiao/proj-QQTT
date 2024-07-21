@@ -3,20 +3,23 @@ import numpy as np
 import torch
 import time
 import cv2
+from .config import cfg
 
 
-def visualize_pc(pcs, FPS, visualize=True, save_video=False, save_path=None):
+def visualize_pc(pcs, FPS=None, visualize=True, save_video=False, save_path=None):
     """
     Visualizes a sequence of point clouds and optionally saves it as a video.
 
     Args:
         pcs (numpy.ndarray or torch.Tensor): A 4D point cloud array with shape (n_frames, n_points, 3).
-        FPS (int, optional): Frames per second for visualization. Default is 30.
+        FPS (int, optional): Frames per second for visualization. Default is None.
         visualize (bool, optional): Flag to display the visualization window. Default is True.
         save_video (bool, optional): Flag to save the visualization as a video. Default is False.
         save_path (str, optional): Path to save the video if save_video is True. Default is None.
 
     """
+    FPS = cfg.FPS if FPS is None else FPS
+
     # Convert the pcs to numpy if it's tensor
     if isinstance(pcs, torch.Tensor):
         pcs = pcs.cpu().numpy()
@@ -60,7 +63,6 @@ def visualize_pc(pcs, FPS, visualize=True, save_video=False, save_path=None):
     view_control.set_front([-1, 0, 0.5])
     view_control.set_up([0, 0, 1])
     view_control.set_zoom(3)
-
 
     for i in range(1, pcs.shape[0]):
         pcd.points = o3d.utility.Vector3dVector(pcs[i])
