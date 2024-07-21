@@ -41,7 +41,7 @@ def visualize_pc(pcs, FPS=None, visualize=True, save_video=False, save_path=None
                 "Invalid dimensions for the video. Check the frame capture."
             )
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # Codec for .mp4 file format
+        fourcc = cv2.VideoWriter_fourcc(*"avc1")  # Codec for .mp4 file format
         video_writer = cv2.VideoWriter(save_path, fourcc, FPS, (width, height))
 
     pcd = o3d.geometry.PointCloud()

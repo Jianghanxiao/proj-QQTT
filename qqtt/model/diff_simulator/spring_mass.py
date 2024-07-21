@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from qqtt.utils import logger
+from qqtt.utils import logger, cfg
 
 
 # Differentialable Spring-Mass Simulator
@@ -16,11 +16,10 @@ class SpringMassSystem(nn.Module):
         spring_Y=3e4,
         dashpot_damping=100,
         drag_damping=3,
-        device="cuda",
     ):
         logger.info(f"[SIMULATION]: Initialize the Spring-Mass System")
         super().__init__()
-        self.device = device
+        self.device = cfg.device
         # Number of mass and springs
         self.n_vertices = init_vertices.shape[0]
         self.n_springs = init_springs.shape[0]
@@ -32,11 +31,13 @@ class SpringMassSystem(nn.Module):
         self.masses = init_masses
         # Internal forces
         self.spring_forces = None
-        self.vertice_forces = torch.zeros((self.n_vertices, 3), device=self.device)
 
         self.dt = dt
         self.num_substeps = num_substeps
-        self.spring_Y = spring_Y
+        self.spring_Y = nn.Parameter(
+            torch.tensor(spring_Y, dtype=torch.float32, device=self.device),
+            requires_grad=True,
+        )
         self.dashpot_damping = dashpot_damping
         self.drag_damping = drag_damping
 
@@ -47,6 +48,7 @@ class SpringMassSystem(nn.Module):
         self.springs = init_springs
         self.rest_lengths = init_rest_lengths
         self.masses = init_masses
+        self.detach()
 
     def step(self):
         for i in range(self.num_substeps):
@@ -59,12 +61,20 @@ class SpringMassSystem(nn.Module):
             self.spring_forces,
         )
 
+    def detach(self):
+        # Detach all other stuff which is used across step
+        self.x = self.x.detach().clone()
+        self.v = self.v.detach().clone()
+        if self.spring_forces is not None:
+            self.spring_forces = self.spring_forces.detach().clone()
+        torch.cuda.empty_cache()
+
     def substep(self):
         # One simulation step of the spring-mass system
-        self.vertice_forces.zero_()
+        vertice_forces = torch.zeros((self.n_vertices, 3), device=self.device)
 
         # Add teh gravity force
-        self.vertice_forces += self.masses[:, None] * torch.tensor(
+        vertice_forces += self.masses[:, None] * torch.tensor(
             [0.0, 0.0, -9.8], device=self.device
         )
         # Calculate the spring forces
@@ -80,17 +90,17 @@ class SpringMassSystem(nn.Module):
             * d
         )
 
-        self.vertice_forces.index_add_(0, idx1, self.spring_forces)
-        self.vertice_forces.index_add_(0, idx2, -self.spring_forces)
+        vertice_forces.index_add_(0, idx1, self.spring_forces)
+        vertice_forces.index_add_(0, idx2, -self.spring_forces)
 
         # Apply the damping forces
         v_rel = torch.einsum("ij,ij->i", (self.v[idx2] - self.v[idx1]), d)
         dashpot_forces = self.dashpot_damping * v_rel[:, None] * d
-        self.vertice_forces.index_add_(0, idx1, dashpot_forces)
-        self.vertice_forces.index_add_(0, idx2, -dashpot_forces)
+        vertice_forces.index_add_(0, idx1, dashpot_forces)
+        vertice_forces.index_add_(0, idx2, -dashpot_forces)
 
         # Update the velocity
-        self.v += self.dt * self.vertice_forces / self.masses[:, None]
+        self.v += self.dt * vertice_forces / self.masses[:, None]
         self.v *= torch.exp(
             torch.tensor(-self.dt * self.drag_damping, device=self.device)
         )
