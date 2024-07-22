@@ -14,15 +14,15 @@ class SimpleData:
         self.data = torch.tensor(self.data, dtype=torch.float32, device=cfg.device)
         self.frame_len = self.data.shape[0]
         self.point_num = self.data.shape[1]
-        if visualize:
-            # Visualize the GT frames
-            self.visualize_data()
+        # Visualize/save the GT frames
+        self.visualize_data(visualize=visualize)
 
-    def visualize_data(self):
-        visualize_pc(
-            self.data,
-            visualize=True,
-        )
+    def visualize_data(self, visualize=False):
+        if visualize:
+            visualize_pc(
+                self.data,
+                visualize=True,
+            )
         visualize_pc(
             self.data,
             visualize=False,

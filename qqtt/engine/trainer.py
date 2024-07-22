@@ -14,6 +14,7 @@ class InvPhyTrainer:
         cfg.data_path = data_path
         cfg.base_dir = base_dir
         cfg.device = device
+        cfg.run_name = base_dir.split("/")[-1]
         # Load the data
         self.dataset = SimpleData(visualize=False)
         # Initialize the vertices, springs, rest lengths and masses
@@ -41,10 +42,15 @@ class InvPhyTrainer:
         wandb.init(
             # set the wandb project where this run will be logged
             project="InvPhys",
-            name="SingleK/test1",
+            name=cfg.run_name,
             config=cfg.to_dict(),
-            # track hyperparameters and run metadata
         )
+        # wandb.init(
+        #     # set the wandb project where this run will be logged
+        #     project="Debug",
+        #     name="SingleK/test6",
+        #     config=cfg.to_dict(),
+        # )
         if not os.path.exists(f"{cfg.base_dir}/train"):
             # Create directory if it doesn't exist
             os.makedirs(f"{cfg.base_dir}/train")
@@ -93,14 +99,29 @@ class InvPhyTrainer:
             total_loss = 0.0
             for j in range(1, self.dataset.frame_len):
                 x, _, _, _ = self.simulator.step()
-                self.simulator.detach()
                 loss = self.compute_points_loss(self.dataset.data[j], x)
                 self.optimizer.zero_grad()
                 loss.backward()
+                grad = self.simulator.spring_Y.grad
                 self.optimizer.step()
+                self.simulator.detach()
                 total_loss += loss.item()
+                wandb.log(
+                    {
+                        "springY_detailed": torch.exp(self.simulator.spring_Y).item(),
+                        "grad": grad.item(),
+                        "iter_step": i * (self.dataset.frame_len - 1) + j,
+                        "iteration": i,
+                    }
+                )
             total_loss /= self.dataset.frame_len - 1
-            wandb.log({"loss": total_loss, "iteration": i})
+            wandb.log(
+                {
+                    "springY": torch.exp(self.simulator.spring_Y).item(),
+                    "loss": total_loss,
+                    "iteration": i,
+                }
+            )
 
             logger.info(f"[Train]: Iteration: {i}, Loss: {total_loss}")
 
@@ -113,8 +134,8 @@ class InvPhyTrainer:
                             video_path,
                             format="mp4",
                             fps=cfg.FPS,
-                        )
-                    }
+                        ),
+                    },
                 )
                 logger.info(f"[Visualize]: Visualize the simulation at iteration {i}")
 
