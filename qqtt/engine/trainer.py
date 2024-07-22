@@ -125,7 +125,7 @@ class InvPhyTrainer:
 
             logger.info(f"[Train]: Iteration: {i}, Loss: {total_loss}")
 
-            if i % cfg.vis_interval == 0:
+            if i % cfg.vis_interval == 0 or i == cfg.iterations - 1:
                 video_path = f"{cfg.base_dir}/train/sim_iter{i}.mp4"
                 self.visualize_sim(save_only=True, video_path=video_path)
                 wandb.log(
