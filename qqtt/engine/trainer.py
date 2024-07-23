@@ -45,12 +45,12 @@ class InvPhyTrainer:
             name=cfg.run_name,
             config=cfg.to_dict(),
         )
-        # wandb.init(
-        #     # set the wandb project where this run will be logged
-        #     project="Debug",
-        #     name="SingleK/test6",
-        #     config=cfg.to_dict(),
-        # )
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project="Debug",
+            name=cfg.run_name,
+            config=cfg.to_dict(),
+        )
         if not os.path.exists(f"{cfg.base_dir}/train"):
             # Create directory if it doesn't exist
             os.makedirs(f"{cfg.base_dir}/train")
