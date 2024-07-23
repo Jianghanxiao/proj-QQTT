@@ -23,7 +23,7 @@ class InvPhyTrainer:
             self.init_springs,
             self.init_rest_lengths,
             self.init_masses,
-        ) = self._init_start(self.dataset.data[0], device=device)
+        ) = self._init_start(self.dataset.data[0])
         # Initialize the physical simulator
         self.simulator = SpringMassSystem(
             self.init_vertices,
@@ -55,7 +55,7 @@ class InvPhyTrainer:
             # Create directory if it doesn't exist
             os.makedirs(f"{cfg.base_dir}/train")
 
-    def _init_start(self, pc, radius=0.1, max_neighbours=20, device="cuda:0"):
+    def _init_start(self, pc, radius=0.1, max_neighbours=20):
         # Connect the springs based on the point cloud
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(pc.cpu().numpy())
@@ -81,15 +81,15 @@ class InvPhyTrainer:
         rest_lengths = np.array(rest_lengths)
         masses = np.ones(len(vertices))
         return (
-            torch.tensor(vertices, dtype=torch.float32, device=device),
-            torch.tensor(springs, dtype=torch.int32, device=device),
-            torch.tensor(rest_lengths, dtype=torch.float32, device=device),
-            torch.tensor(masses, dtype=torch.float32, device=device),
+            torch.tensor(vertices, dtype=torch.float32, device=cfg.device),
+            torch.tensor(springs, dtype=torch.int32, device=cfg.device),
+            torch.tensor(rest_lengths, dtype=torch.float32, device=cfg.device),
+            torch.tensor(masses, dtype=torch.float32, device=cfg.device),
         )
 
-    def train(self):
+    def train(self, start_epoch=-1):
         # Train the model with the physical simulator
-        for i in range(cfg.iterations):
+        for i in range(start_epoch + 1, cfg.iterations):
             self.simulator.reset_system(
                 self.init_vertices,
                 self.init_springs,
@@ -127,13 +127,43 @@ class InvPhyTrainer:
                         ),
                     },
                 )
-                logger.info(f"[Visualize]: Visualize the simulation at iteration {i}")
+                cur_model = {
+                    "epoch": i,
+                    "model_state_dict": self.simulator.state_dict(),
+                    "optimizer_state_dict": self.optimizer.state_dict(),
+                }
+                torch.save(cur_model, f"{cfg.base_dir}/train/iter_{i}.pth")
+                logger.info(
+                    f"[Visualize]: Visualize the simulation at iteration {i} and save the model"
+                )
 
         wandb.finish()
 
     def compute_points_loss(self, gt, x):
         # Compute the mse loss between the ground truth and the predicted points
         return smooth_l1_loss(x, gt, beta=1.0, reduction="mean")
+
+    def test(self, model_path):
+        # Load the model
+        logger.info(f"Load model from {model_path}")
+        checkpoint = torch.load(model_path, map_location=cfg.device)
+        self.simulator.load_state_dict(checkpoint["model_state_dict"])
+        self.simulator.to(cfg.device)
+
+        self.visualize_sim(save_only=False)
+
+    def resume_train(self, model_path):
+        # Load the model
+        checkpoint = torch.load(model_path, map_location=cfg.device)
+        epoch = checkpoint["epoch"]
+        logger.info(
+            f"Continue training with model from {model_path} at epoch {epoch}"
+        )
+        self.simulator.load_state_dict(checkpoint["model_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.simulator.to(cfg.device)
+
+        self.train(epoch)
 
     def visualize_sim(self, save_only=True, video_path=None):
         # Visualize the whole simulation using current set of parameters in the physical simulator
