@@ -77,9 +77,6 @@ class ExpLogger(logging.Logger):
 
     @master_only
     def set_log_file(self, path: str, name: Optional[str] = None):
-        if self.filehandler is not None:
-            self.warning("log file path can only be set once")
-            return
         if not os.path.exists(path):
             os.makedirs(path)
         file_path = os.path.join(path, f"{self.name}.log" if name is None else f"{name}.log")

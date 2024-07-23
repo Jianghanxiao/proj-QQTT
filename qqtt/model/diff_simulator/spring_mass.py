@@ -31,18 +31,15 @@ class SpringMassSystem(nn.Module):
         self.masses = init_masses
         # Internal forces
         self.spring_forces = None
+        # Use the log value to make it easier to learn
+        self.spring_Y = nn.Parameter(
+            torch.log(torch.tensor(spring_Y, dtype=torch.float32, device=self.device))
+            * torch.ones(self.n_springs, dtype=torch.float32, device=self.device),
+            requires_grad=True,
+        )
 
         self.dt = dt
         self.num_substeps = num_substeps
-        # Use the log value to make it easier to learn
-        self.spring_Y = nn.Parameter(
-            torch.tensor(
-                torch.log(torch.tensor(spring_Y)),
-                dtype=torch.float32,
-                device=self.device,
-            ),
-            requires_grad=True,
-        )
         self.dashpot_damping = dashpot_damping
         self.drag_damping = drag_damping
 
@@ -90,7 +87,7 @@ class SpringMassSystem(nn.Module):
         dis = x2 - x1
         d = dis / torch.norm(dis, dim=1)[:, None]
         self.spring_forces = (
-            torch.exp(self.spring_Y)
+            torch.exp(self.spring_Y)[:, None]
             * (torch.norm(dis, dim=1) / self.rest_lengths - 1)[:, None]
             * d
         )

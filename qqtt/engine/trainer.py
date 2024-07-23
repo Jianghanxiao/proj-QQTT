@@ -41,16 +41,16 @@ class InvPhyTrainer:
         )
         wandb.init(
             # set the wandb project where this run will be logged
-            project="InvPhys",
+            project="InvPhys_twoK",
             name=cfg.run_name,
             config=cfg.to_dict(),
         )
-        wandb.init(
-            # set the wandb project where this run will be logged
-            project="Debug",
-            name=cfg.run_name,
-            config=cfg.to_dict(),
-        )
+        # wandb.init(
+        #     # set the wandb project where this run will be logged
+        #     project="Debug",
+        #     name=cfg.run_name,
+        #     config=cfg.to_dict(),
+        # )
         if not os.path.exists(f"{cfg.base_dir}/train"):
             # Create directory if it doesn't exist
             os.makedirs(f"{cfg.base_dir}/train")
@@ -102,22 +102,12 @@ class InvPhyTrainer:
                 loss = self.compute_points_loss(self.dataset.data[j], x)
                 self.optimizer.zero_grad()
                 loss.backward()
-                grad = self.simulator.spring_Y.grad
                 self.optimizer.step()
                 self.simulator.detach()
                 total_loss += loss.item()
-                wandb.log(
-                    {
-                        "springY_detailed": torch.exp(self.simulator.spring_Y).item(),
-                        "grad": grad.item(),
-                        "iter_step": i * (self.dataset.frame_len - 1) + j,
-                        "iteration": i,
-                    }
-                )
             total_loss /= self.dataset.frame_len - 1
             wandb.log(
                 {
-                    "springY": torch.exp(self.simulator.spring_Y).item(),
                     "loss": total_loss,
                     "iteration": i,
                 }
