@@ -1,5 +1,6 @@
 wandb/
 experiments/
+past_exps/
 *.npy
 data/
 .DS_Store

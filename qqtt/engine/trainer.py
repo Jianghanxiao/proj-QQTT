@@ -39,18 +39,20 @@ class InvPhyTrainer:
         self.optimizer = torch.optim.Adam(
             self.simulator.parameters(), lr=cfg.base_lr, betas=(0.9, 0.99)
         )
-        wandb.init(
-            # set the wandb project where this run will be logged
-            project="InvPhys_twoK",
-            name=cfg.run_name,
-            config=cfg.to_dict(),
-        )
-        # wandb.init(
-        #     # set the wandb project where this run will be logged
-        #     project="Debug",
-        #     name=cfg.run_name,
-        #     config=cfg.to_dict(),
-        # )
+        if "debug" not in cfg.run_name:
+            wandb.init(
+                # set the wandb project where this run will be logged
+                project="InvPhys_rigid",
+                name=cfg.run_name,
+                config=cfg.to_dict(),
+            )
+        else:
+            wandb.init(
+                # set the wandb project where this run will be logged
+                project="Debug",
+                name=cfg.run_name,
+                config=cfg.to_dict(),
+            )
         if not os.path.exists(f"{cfg.base_dir}/train"):
             # Create directory if it doesn't exist
             os.makedirs(f"{cfg.base_dir}/train")
