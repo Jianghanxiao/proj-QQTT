@@ -1,4 +1,5 @@
 wandb/
+past_exps/
 experiments/
 *.npy
 data/
