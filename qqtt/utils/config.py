@@ -13,7 +13,7 @@ class SimpleConfig:
         self.iterations = 500
         self.vis_interval = self.iterations / 10
         self.init_spring_Y = 3e4
-        self.init_collide_elas = 1
+        self.init_collide_elas = 0.5
         self.init_collide_fric = 0.3
 
     def to_dict(self):
