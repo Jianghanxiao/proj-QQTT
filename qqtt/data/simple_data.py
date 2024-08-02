@@ -15,7 +15,7 @@ class SimpleData:
         self.frame_len = self.data.shape[0]
         self.point_num = self.data.shape[1]
         # Visualize/save the GT frames
-        self.visualize_data(visualize=visualize)
+        # self.visualize_data(visualize=visualize)
 
     def visualize_data(self, visualize=False):
         if visualize:

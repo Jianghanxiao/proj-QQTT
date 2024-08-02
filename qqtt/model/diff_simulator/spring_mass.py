@@ -41,7 +41,7 @@ class SpringMassSystem(nn.Module):
                 dtype=torch.float32,
                 device=self.device,
             ),
-            requires_grad=True,
+            requires_grad=False,
         )
         self.dashpot_damping = dashpot_damping
         self.drag_damping = drag_damping
