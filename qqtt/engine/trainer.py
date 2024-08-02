@@ -33,6 +33,8 @@ class InvPhyTrainer:
             dt=cfg.dt,
             num_substeps=cfg.num_substeps,
             spring_Y=cfg.init_spring_Y,
+            collide_elas=cfg.init_collide_elas,
+            collide_fric=cfg.init_collide_fric,
             dashpot_damping=cfg.dashpot_damping,
             drag_damping=cfg.drag_damping,
         )
@@ -42,7 +44,7 @@ class InvPhyTrainer:
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
-                project="InvPhys_rigid",
+                project="InvPhys_twoK",
                 name=cfg.run_name,
                 config=cfg.to_dict(),
             )
@@ -111,6 +113,8 @@ class InvPhyTrainer:
             wandb.log(
                 {
                     "loss": total_loss,
+                    "collide_else": self.simulator.collide_elas.item(),
+                    "collide_fric": self.simulator.collide_fric.item(),
                     "iteration": i,
                 }
             )

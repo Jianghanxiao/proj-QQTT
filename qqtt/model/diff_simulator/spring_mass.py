@@ -11,11 +11,13 @@ class SpringMassSystem(nn.Module):
         init_springs,
         init_rest_lengths,
         init_masses,
-        dt=5e-5,
-        num_substeps=1000,
-        spring_Y=3e4,
-        dashpot_damping=100,
-        drag_damping=3,
+        dt,
+        num_substeps,
+        spring_Y,
+        collide_elas,
+        collide_fric,
+        dashpot_damping,
+        drag_damping,
     ):
         logger.info(f"[SIMULATION]: Initialize the Spring-Mass System")
         super().__init__()
@@ -35,6 +37,23 @@ class SpringMassSystem(nn.Module):
         self.spring_Y = nn.Parameter(
             torch.log(torch.tensor(spring_Y, dtype=torch.float32, device=self.device))
             * torch.ones(self.n_springs, dtype=torch.float32, device=self.device),
+            requires_grad=True,
+        )
+        # Parameters for the collision
+        self.collide_elas = nn.Parameter(
+            torch.tensor(
+                collide_elas,
+                dtype=torch.float32,
+                device=self.device,
+            ),
+            requires_grad=True,
+        )
+        self.collide_fric = nn.Parameter(
+            torch.tensor(
+                collide_fric,
+                dtype=torch.float32,
+                device=self.device,
+            ),
             requires_grad=True,
         )
 
@@ -108,6 +127,44 @@ class SpringMassSystem(nn.Module):
         )
         self.x += self.dt * self.v
 
+        self.impulse_collision()
+        # self.simple_ground_collision()
+
+    def impulse_collision(self):
+        normal = torch.tensor([0.0, 0.0, 1.0], device=self.device)
+
+        # Check which vertices are below the ground and have velocity components going downward
+        collision_mask = (self.x[:, 2] < 0) & (
+            torch.einsum("ij,j->i", self.v, normal) < 0
+        )
+
+        if collision_mask.any():
+            # Select the vertices that are colliding
+            v_i = self.v[collision_mask]
+
+            # Calculate normal and tangential components of the velocity
+            v_normal = torch.einsum("ij,j->i", v_i, normal)[:, None] * normal
+            v_tao = v_i - v_normal
+            v_normal_new = -self.collide_elas * v_normal
+
+            # Calculate the new tangential velocity component with friction
+            a = torch.max(
+                torch.tensor(0.0, device=self.device),
+                1
+                - self.collide_fric
+                * (1 + self.collide_elas)
+                * v_normal.norm(dim=1)
+                / v_tao.norm(dim=1),
+            )[:, None]
+
+            v_tao_new = a * v_tao
+            v_i_new = v_normal_new + v_tao_new
+
+            # Update velocities and positions of colliding vertices
+            self.v[collision_mask] = v_i_new
+            self.x[collision_mask, 2] = 0
+
+    def simple_ground_collision(self):
         # Simple ground condition for now
         self.x[:, 2].clamp_(min=0)
         self.v[self.x[:, 2] == 0, 2] = 0

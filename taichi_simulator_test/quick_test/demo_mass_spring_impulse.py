@@ -78,7 +78,7 @@ class SpringMassSystem_taichi:
         num_substeps=1000,
         spring_Y=3e4,
         dashpot_damping=100,
-        drag_damping=1,
+        drag_damping=3,
         break_force_limit=200000,
         collide_elas=0.5,
         collide_fric=0.3,
@@ -230,7 +230,7 @@ def demo1():
         num_substeps=1000,
         spring_Y=3e4,
         dashpot_damping=100,
-        drag_damping=1,
+        drag_damping=3,
     )
     # For fake rigid setting
     # mySystem = SpringMassSystem_taichi(
