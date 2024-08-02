@@ -10,7 +10,7 @@ class SimpleConfig:
         self.dashpot_damping = 100
         self.drag_damping = 3
         self.base_lr = 1e-3
-        self.iterations = 200
+        self.iterations = 500
         self.vis_interval = self.iterations / 10
         self.init_spring_Y = 3e4
         self.init_collide_elas = 1
