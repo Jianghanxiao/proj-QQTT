@@ -4,6 +4,7 @@ past_exps/
 *.npy
 data/
 .DS_Store
+*.dat
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

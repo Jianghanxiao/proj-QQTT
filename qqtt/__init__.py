@@ -1,2 +1,2 @@
 from .model import SpringMassSystem
-from .engine import InvPhyTrainer
+from .engine import InvPhyTrainer, InvPhyTrainerCMA
