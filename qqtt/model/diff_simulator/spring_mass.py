@@ -145,14 +145,14 @@ class SpringMassSystem(nn.Module):
             # Calculate normal and tangential components of the velocity
             v_normal = torch.einsum("ij,j->i", v_i, normal)[:, None] * normal
             v_tao = v_i - v_normal
-            v_normal_new = -self.collide_elas * v_normal
+            v_normal_new = -torch.clamp(self.collide_elas, min=0.0, max=1.0) * v_normal
 
             # Calculate the new tangential velocity component with friction
             a = torch.max(
                 torch.tensor(0.0, device=self.device),
                 1
-                - self.collide_fric
-                * (1 + self.collide_elas)
+                - torch.clamp(self.collide_fric, min=0.0, max=1.0)
+                * (1 + torch.clamp(self.collide_elas, min=0.0, max=1.0))
                 * v_normal.norm(dim=1)
                 / v_tao.norm(dim=1),
             )[:, None]
