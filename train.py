@@ -6,7 +6,7 @@ from datetime import datetime
 def demo_multiple_k():
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/TwoK_impulse_clamp"
+    base_dir = f"experiments/TwoK_impulse_clamp_rand1"
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainer(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/table_2k.npy",
@@ -33,14 +33,14 @@ def demo_rigid():
 def demo_cma_collision():
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/cma_collision"
+    base_dir = f"experiments/cma_collision_rand1"
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainerCMA(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/table_2k.npy",
         base_dir=base_dir,
     )
     trainer.optimize_collision(
-        model_path="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/TwoK_impulse_clamp/train/iter_499.pth"
+        model_path="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/TwoK_impulse_clamp_rand1/train/iter_499.pth"
     )
 
 
