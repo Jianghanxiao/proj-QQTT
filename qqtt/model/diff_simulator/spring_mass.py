@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 from qqtt.utils import logger, cfg
 
+def nclamp(input, min, max):
+    return input.clamp(min=min, max=max).detach() + input - input.detach()
+
 
 # Differentialable Spring-Mass Simulator
 class SpringMassSystem(nn.Module):
@@ -145,14 +148,14 @@ class SpringMassSystem(nn.Module):
             # Calculate normal and tangential components of the velocity
             v_normal = torch.einsum("ij,j->i", v_i, normal)[:, None] * normal
             v_tao = v_i - v_normal
-            v_normal_new = -torch.clamp(self.collide_elas, min=0.0, max=1.0) * v_normal
+            v_normal_new = -nclamp(self.collide_elas, min=0.0, max=1.0) * v_normal
 
             # Calculate the new tangential velocity component with friction
             a = torch.max(
                 torch.tensor(0.0, device=self.device),
                 1
-                - torch.clamp(self.collide_fric, min=0.0, max=1.0)
-                * (1 + torch.clamp(self.collide_elas, min=0.0, max=1.0))
+                - nclamp(self.collide_fric, min=0.0, max=1.0)
+                * (1 + nclamp(self.collide_elas, min=0.0, max=1.0))
                 * v_normal.norm(dim=1)
                 / v_tao.norm(dim=1),
             )[:, None]
