@@ -94,6 +94,8 @@ class InvPhyTrainer:
         )
 
     def train(self, start_epoch=-1):
+        best_loss = None
+        best_epoch = None
         # Train the model with the physical simulator
         for i in range(start_epoch + 1, cfg.iterations):
             self.simulator.reset_system(
@@ -140,6 +142,26 @@ class InvPhyTrainer:
                     "model_state_dict": self.simulator.state_dict(),
                     "optimizer_state_dict": self.optimizer.state_dict(),
                 }
+                if best_loss == None or total_loss < best_loss:
+                    # Remove old best model file if it exists
+                    if best_loss is not None:
+                        old_best_model_path = (
+                            f"{cfg.base_dir}/train/best_{best_epoch}.pth"
+                        )
+                        if os.path.exists(old_best_model_path):
+                            os.remove(old_best_model_path)
+
+                    # Update best loss and best epoch
+                    best_loss = total_loss
+                    best_epoch = i
+
+                    # Save new best model
+                    best_model_path = f"{cfg.base_dir}/train/best_{best_epoch}.pth"
+                    torch.save(cur_model, best_model_path)
+                    logger.info(
+                        f"Latest best model saved: epoch {best_epoch} with loss {best_loss}"
+                    )
+
                 torch.save(cur_model, f"{cfg.base_dir}/train/iter_{i}.pth")
                 logger.info(
                     f"[Visualize]: Visualize the simulation at iteration {i} and save the model"
