@@ -23,7 +23,9 @@ class InvPhyTrainer:
             self.init_springs,
             self.init_rest_lengths,
             self.init_masses,
-        ) = self._init_start(self.dataset.data[0])
+        ) = self._init_start(
+            self.dataset.data[0], radius=cfg.radius, max_neighbours=cfg.max_neighbours
+        )
         # Initialize the physical simulator
         self.simulator = SpringMassSystem(
             self.init_vertices,
@@ -44,7 +46,7 @@ class InvPhyTrainer:
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
-                project="InvPhys_twoK",
+                project="teddy_twoK",
                 name=cfg.run_name,
                 config=cfg.to_dict(),
             )
@@ -162,9 +164,7 @@ class InvPhyTrainer:
         # Load the model
         checkpoint = torch.load(model_path, map_location=cfg.device)
         epoch = checkpoint["epoch"]
-        logger.info(
-            f"Continue training with model from {model_path} at epoch {epoch}"
-        )
+        logger.info(f"Continue training with model from {model_path} at epoch {epoch}")
         self.simulator.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.simulator.to(cfg.device)

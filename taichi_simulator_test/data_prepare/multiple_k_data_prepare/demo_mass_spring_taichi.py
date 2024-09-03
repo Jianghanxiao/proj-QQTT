@@ -23,9 +23,14 @@ def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20):
                 spring_flags[i, j] = 1
                 spring_flags[j, i] = 1
                 springs.append([i, j])
-                # Manually set two different k for the object
-                if points[i][1] < 0.49:
-                    spring_Y.append(1e4)
+                # # Manually set two different k for the table
+                # if points[i][1] < 0.49:
+                #     spring_Y.append(1e4)
+                # else:
+                #     spring_Y.append(1e5)
+                # Manually set two different k for the tedy
+                if points[i][1] < -0.35:
+                    spring_Y.append(1e3)
                 else:
                     spring_Y.append(1e5)
                 rest_lengths.append(np.linalg.norm(points[i] - points[j]))
@@ -179,16 +184,28 @@ class SpringMassSystem_taichi:
 
 
 def demo1():
-    # Load the table into taichi and create a simple spring-mass system
-    table = o3d.io.read_point_cloud(
-        "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/table.ply"
+    # # Load the table into taichi and create a simple spring-mass system
+    # table = o3d.io.read_point_cloud(
+    #     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/table.ply"
+    # )
+    # table.translate([0, 0, 1])
+    # # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1)
+    # # o3d.visualization.draw_geometries([table, coordinate])
+    # init_vertices, init_springs, init_rest_lengths, init_masses, spring_Y = (
+    #     get_spring_mass_from_pcd(table)
+    # )
+
+    # Load the teddy into taichi and create a simple spring-mass system
+    teddy = o3d.io.read_point_cloud(
+        "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/teddy.ply"
     )
-    table.translate([0, 0, 1])
+    teddy.translate([0, 0, 1])
     # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1)
-    # o3d.visualization.draw_geometries([table, coordinate])
+    # o3d.visualization.draw_geometries([teddy, coordinate])
     init_vertices, init_springs, init_rest_lengths, init_masses, spring_Y = (
-        get_spring_mass_from_pcd(table)
+        get_spring_mass_from_pcd(teddy)
     )
+
     lineset, pcd = get_spring_mass_visual(
         init_vertices,
         init_springs,
@@ -256,8 +273,8 @@ def demo1():
 
     # Save points_trajectories to a npy file
     points_trajectories = np.array(points_trajectories)
-    np.save(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/table_2k.npy", points_trajectories)
-    np.save(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/table_2k_springY.npy", spring_Y)
+    np.save(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/teddy_2k.npy", points_trajectories)
+    np.save(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/teddy_2k_springY.npy", spring_Y)
 
 
 
