@@ -37,13 +37,14 @@ class CollisionDetector:
         ti.deactivate_all_snodes()
         self.assign_points_to_grid()
         collision_len = self.detect_collisions()
-        return self.get_collisions(collision_len)
+        collisions = self.get_collisions(collision_len)
+        return collisions
 
     @ti.kernel
     def assign_points_to_grid(self):
         for i in range(self.num_points):
             cell = (self.points[i] / self.grid_size).cast(ti.i32)
-            cell = ti.max(ti.min(cell, self.grid_count - 1), 0) 
+            cell = ti.max(ti.min(cell, self.grid_count - 1), 0)
             self.grid[cell[0], cell[1], cell[2]].append(i)
 
     @ti.func
@@ -109,34 +110,46 @@ class CollisionDetector:
         return torch.unique(collisions_torch, dim=0)
 
 
-# S = ti.root.pointer(ti.i, 10).dynamic(ti.j, 1024, chunk_size=32)
-# x = ti.field(int)
-# S.place(x)
+def test1():
+    seed = 1234
+    torch.manual_seed(seed)
+    import time
 
-# @ti.kernel
-# def add_data():
-#     for i in range(10):
-#         for j in range(i):
-#             x[i].append(j)
-#         print(x[i].length())  # will print i
+    num_points = 100000
+    points = torch.rand(num_points, 3).cuda()
+    start = time.time()
+    collisionDetector = CollisionDetector(num_points, 0.001, 0.07)
+    for i in range(1):
+        # print("Time: ", time.time() - start)
+        # start = time.time()
+        # import pdb
+        # pdb.set_trace()
+        collisions = collisionDetector.reset(points)
+        # print(f"FINAL_Length: {len(collisions)}")
+    print("Time: ", time.time() - start)
+    print(collisions)
+    # Use open3d to visualize the points and the collisions
+    import open3d as o3d
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points.cpu().numpy())
+    colors = np.zeros((num_points, 3))
+    colors[collisions.cpu().numpy()] = [0.2, 0.2, 0.2]
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+    # Draw sphere for the collision points
+    spheres = []
+    for i in range(len(collisions)):
+        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
+        sphere.paint_uniform_color([1, 0, 0])
+        sphere.translate(points[collisions[i][0]].cpu().numpy())
+        spheres.append(sphere)
+        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
+        sphere.paint_uniform_color([1, 0, 0])
+        sphere.translate(points[collisions[i][1]].cpu().numpy())
+        spheres.append(sphere)
 
-#     for i in range(10):
-#         x[i].deactivate()
-#         print(x[i].length())  # will print 0
+    # collision_pcd = o3d.geometry.PointCloud()
+    # collision_pcd.points = o3d.utility.Vector3dVector(collision_points)
+    # collision_pcd.colors = o3d.utility.Vector3dVector(np.array([[1, 0, 0]] * len(collision_points)))
+    o3d.visualization.draw_geometries([pcd] + spheres)
 
-# add_data()
-# import pdb
-# pdb.set_trace()
-seed = 1234
-torch.manual_seed(seed)
-import time
-
-start = time.time()
-collisionDetector = CollisionDetector(100000, 0.001, 0.07)
-points = torch.rand(100000, 3).cuda()
-import pdb
-pdb.set_trace()
-collisions = collisionDetector.reset(points)
-print(f"FINAL_Length: {len(collisions)}")
-print("Time: ", time.time() - start)
-print(collisions)
+test1()
