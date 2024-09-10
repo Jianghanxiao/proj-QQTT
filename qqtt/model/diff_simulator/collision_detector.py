@@ -14,6 +14,7 @@ class CollisionDetector:
         self.grid_count = (int(1 // grid_size) + 1) * 3
 
         self.points = ti.Vector.field(3, dtype=ti.f32, shape=num_points)
+        self.points_mask = ti.field(ti.i32, shape=num_points)
 
         self.grid = ti.field(ti.i32)
         self.grid_SNodes = ti.root.pointer(
@@ -32,7 +33,11 @@ class CollisionDetector:
             self.collisions_y
         )
 
-    def reset(self, points):
+    def reset(self, points, points_mask=None):
+        if points_mask is not None:
+            self.points_mask.from_torch(points_mask)
+        else:
+            self.points_mask.fill(1)
         self.points.from_torch(points)
         ti.deactivate_all_snodes()
         self.assign_points_to_grid()
@@ -49,8 +54,9 @@ class CollisionDetector:
 
     @ti.func
     def check_collision(self, p1, p2):
-        # print((self.points[p1] - self.points[p2]).norm())
-        return (self.points[p1] - self.points[p2]).norm() < self.radius
+        return (self.points_mask[p1] != self.points_mask[p2]) and (
+            (self.points[p1] - self.points[p2]).norm() < self.radius
+        )
 
     @ti.kernel
     def detect_collisions(self) -> ti.i32:
@@ -119,17 +125,19 @@ def test1():
     points = torch.rand(num_points, 3).cuda()
     start = time.time()
     collisionDetector = CollisionDetector(num_points, 0.001, 0.07)
-    for i in range(1):
+    for i in range(10):
         # print("Time: ", time.time() - start)
         # start = time.time()
         # import pdb
         # pdb.set_trace()
-        collisions = collisionDetector.reset(points)
+        points_mask = torch.randint(0, 2, (num_points,), dtype=torch.int32).cuda()
+        collisions = collisionDetector.reset(points, points_mask)
         # print(f"FINAL_Length: {len(collisions)}")
     print("Time: ", time.time() - start)
     print(collisions)
     # Use open3d to visualize the points and the collisions
     import open3d as o3d
+
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points.cpu().numpy())
     colors = np.zeros((num_points, 3))
@@ -151,5 +159,6 @@ def test1():
     # collision_pcd.points = o3d.utility.Vector3dVector(collision_points)
     # collision_pcd.colors = o3d.utility.Vector3dVector(np.array([[1, 0, 0]] * len(collision_points)))
     o3d.visualization.draw_geometries([pcd] + spheres)
+
 
 test1()
