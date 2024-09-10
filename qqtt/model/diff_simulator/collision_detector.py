@@ -1,17 +1,17 @@
 import taichi as ti
 import torch
 import numpy as np
+import time
 
 ti.init(arch=ti.gpu)
 
 
 @ti.data_oriented
 class CollisionDetector:
-    def __init__(self, num_points, radius, grid_size):
+    def __init__(self, num_points, radius, grid_count=60):
         self.num_points = num_points
         self.radius = radius
-        self.grid_size = grid_size
-        self.grid_count = (int(1 // grid_size) + 1) * 3
+        self.grid_count = grid_count
 
         self.points = ti.Vector.field(3, dtype=ti.f32, shape=num_points)
         self.points_mask = ti.field(ti.i32, shape=num_points)
@@ -39,6 +39,11 @@ class CollisionDetector:
         else:
             self.points_mask.fill(1)
         self.points.from_torch(points)
+        # Have some extra grids to avoid boundary issues
+        grid_size = (points.max(0)[0] - points.min(0)[0]) / (self.grid_count - 10)
+        self.grid_size = ti.Vector(
+            [grid_size[0].item(), grid_size[1].item(), grid_size[2].item()]
+        )
         ti.deactivate_all_snodes()
         self.assign_points_to_grid()
         collision_len = self.detect_collisions()
@@ -123,14 +128,15 @@ def test1():
 
     num_points = 100000
     points = torch.rand(num_points, 3).cuda()
+    points_mask = torch.randint(0, 2, (num_points,), dtype=torch.int32).cuda()
     start = time.time()
-    collisionDetector = CollisionDetector(num_points, 0.001, 0.07)
-    for i in range(10):
+    # collisionDetector = CollisionDetector(num_points, 0.001, 0.07)
+    collisionDetector = CollisionDetector(num_points, 0.001)
+    for i in range(100):
         # print("Time: ", time.time() - start)
         # start = time.time()
         # import pdb
         # pdb.set_trace()
-        points_mask = torch.randint(0, 2, (num_points,), dtype=torch.int32).cuda()
         collisions = collisionDetector.reset(points, points_mask)
         # print(f"FINAL_Length: {len(collisions)}")
     print("Time: ", time.time() - start)
