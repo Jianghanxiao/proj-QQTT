@@ -42,9 +42,19 @@ class CollisionDetector:
         # Have some extra grids to avoid boundary issues
         grid_size = (points.max(0)[0] - points.min(0)[0]) / (self.grid_count - 10)
         self.grid_size = ti.Vector(
-            [grid_size[0].item(), grid_size[1].item(), grid_size[2].item()]
+            [
+                max(self.radius, grid_size[0].item()),
+                max(self.radius, grid_size[1].item()),
+                max(self.radius, grid_size[2].item()),
+            ]
         )
-        self.lower_bound = ti.Vector([points.min(0)[0][0].item(), points.min(0)[0][1].item(), points.min(0)[0][2].item()])
+        self.lower_bound = ti.Vector(
+            [
+                points.min(0)[0][0].item(),
+                points.min(0)[0][1].item(),
+                points.min(0)[0][2].item(),
+            ]
+        )
         ti.deactivate_all_snodes()
         self.assign_points_to_grid()
         collision_len = self.detect_collisions()
