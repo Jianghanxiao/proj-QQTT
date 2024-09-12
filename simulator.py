@@ -17,6 +17,8 @@ def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20, device="cuda"):
         [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
             points[i], raidus, max_neighbours
         )
+        # import pdb
+        # pdb.set_trace()
         idx = idx[1:]
         for j in idx:
             if spring_flags[i, j] == 0 and spring_flags[j, i] == 0:

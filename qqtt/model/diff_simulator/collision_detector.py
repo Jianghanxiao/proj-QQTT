@@ -44,6 +44,7 @@ class CollisionDetector:
         self.grid_size = ti.Vector(
             [grid_size[0].item(), grid_size[1].item(), grid_size[2].item()]
         )
+        self.lower_bound = ti.Vector([points.min(0)[0][0].item(), points.min(0)[0][1].item(), points.min(0)[0][2].item()])
         ti.deactivate_all_snodes()
         self.assign_points_to_grid()
         collision_len = self.detect_collisions()
@@ -53,7 +54,7 @@ class CollisionDetector:
     @ti.kernel
     def assign_points_to_grid(self):
         for i in range(self.num_points):
-            cell = (self.points[i] / self.grid_size).cast(ti.i32)
+            cell = ((self.points[i] - self.lower_bound) / self.grid_size).cast(ti.i32)
             cell = ti.max(ti.min(cell, self.grid_count - 1), 0)
             self.grid[cell[0], cell[1], cell[2]].append(i)
 
