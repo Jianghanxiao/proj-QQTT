@@ -1,1 +1,1 @@
-from .spring_mass_backup import SpringMassSystem
+from .spring_mass import SpringMassSystem

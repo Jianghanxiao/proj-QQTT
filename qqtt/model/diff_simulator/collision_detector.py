@@ -108,7 +108,6 @@ class CollisionDetector:
 
     @ti.kernel
     def extract_collisions(self, buffer: ti.types.ndarray(ti.i32, ndim=2)):
-        print(self.collisions_x.length())
         for i in range(self.collisions_x.length()):
             buffer[i, 0] = self.collisions_x[i]
             buffer[i, 1] = self.collisions_y[i]
@@ -167,4 +166,4 @@ def test1():
     o3d.visualization.draw_geometries([pcd] + spheres)
 
 
-test1()
+# test1()
