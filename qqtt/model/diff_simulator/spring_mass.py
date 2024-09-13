@@ -215,7 +215,9 @@ class SpringMassSystem(nn.Module):
         ) * collision_normal
 
         impulse_n = (
-            -(1 + self.collide_object_elas) * v_rel_n / (1 / m1 + 1 / m2)[:, None]
+            -(1 + nclamp(self.collide_object_elas, min=0.0, max=1.0))
+            * v_rel_n
+            / (1 / m1 + 1 / m2)[:, None]
         )
 
         v_rel_t = relative_velocity - v_rel_n
