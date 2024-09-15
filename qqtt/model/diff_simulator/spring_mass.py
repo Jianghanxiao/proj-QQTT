@@ -171,7 +171,6 @@ class SpringMassSystem(nn.Module):
             self.object_interval_index = 0
             flag = self.object_collision()
             if flag:
-                print("$$$$$$$$$$$$$$$")
                 self.object_collision_interval = 1
             else:
                 self.object_collision_interval = 10

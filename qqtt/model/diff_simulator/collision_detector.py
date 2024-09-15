@@ -150,31 +150,31 @@ def test1():
         collisions = collisionDetector.reset(points, points_mask)
         # print(f"FINAL_Length: {len(collisions)}")
     print("Time: ", time.time() - start)
-    print(collisions)
-    # Use open3d to visualize the points and the collisions
-    import open3d as o3d
+    # print(collisions)
+    # # Use open3d to visualize the points and the collisions
+    # import open3d as o3d
 
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points.cpu().numpy())
-    colors = np.zeros((num_points, 3))
-    colors[collisions.cpu().numpy()] = [0.2, 0.2, 0.2]
-    pcd.colors = o3d.utility.Vector3dVector(colors)
-    # Draw sphere for the collision points
-    spheres = []
-    for i in range(len(collisions)):
-        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
-        sphere.paint_uniform_color([1, 0, 0])
-        sphere.translate(points[collisions[i][0]].cpu().numpy())
-        spheres.append(sphere)
-        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
-        sphere.paint_uniform_color([1, 0, 0])
-        sphere.translate(points[collisions[i][1]].cpu().numpy())
-        spheres.append(sphere)
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(points.cpu().numpy())
+    # colors = np.zeros((num_points, 3))
+    # colors[collisions.cpu().numpy()] = [0.2, 0.2, 0.2]
+    # pcd.colors = o3d.utility.Vector3dVector(colors)
+    # # Draw sphere for the collision points
+    # spheres = []
+    # for i in range(len(collisions)):
+    #     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
+    #     sphere.paint_uniform_color([1, 0, 0])
+    #     sphere.translate(points[collisions[i][0]].cpu().numpy())
+    #     spheres.append(sphere)
+    #     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
+    #     sphere.paint_uniform_color([1, 0, 0])
+    #     sphere.translate(points[collisions[i][1]].cpu().numpy())
+    #     spheres.append(sphere)
 
-    # collision_pcd = o3d.geometry.PointCloud()
-    # collision_pcd.points = o3d.utility.Vector3dVector(collision_points)
-    # collision_pcd.colors = o3d.utility.Vector3dVector(np.array([[1, 0, 0]] * len(collision_points)))
-    o3d.visualization.draw_geometries([pcd] + spheres)
+    # # collision_pcd = o3d.geometry.PointCloud()
+    # # collision_pcd.points = o3d.utility.Vector3dVector(collision_points)
+    # # collision_pcd.colors = o3d.utility.Vector3dVector(np.array([[1, 0, 0]] * len(collision_points)))
+    # o3d.visualization.draw_geometries([pcd] + spheres)
 
 
 # test1()

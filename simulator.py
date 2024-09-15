@@ -3,7 +3,7 @@ import open3d as o3d
 import numpy as np
 import torch
 from qqtt.utils import visualize_pc, cfg
-
+import time
 
 def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20, device="cuda"):
     pcd_tree = o3d.geometry.KDTreeFlann(pcd)
@@ -121,8 +121,11 @@ def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display
         view_control.set_up([0, 0, 1])
         view_control.set_zoom(3)
 
+        start = time.time()
+
         for i in range(500):
             print(i, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            print(time.time()-start)
             vertices, springs, rest_lengths, spring_forces = simulator.step()
             new_lineset, new_pcd = get_spring_mass_visual(
                 vertices.cpu().numpy(),
