@@ -166,15 +166,57 @@ class SpringMassSystem(nn.Module):
     def impulse_collision(self):
         # Check collisions with the ground
         self.ground_collision()
-        # Check collisions among objects
         if self.object_interval_index % self.object_collision_interval == 0:
             self.object_interval_index = 0
-            flag = self.object_collision()
+            if self.object_collision_interval == 1:
+                flag = self.object_collision()
+            else:
+                if self.rough_box_collision():
+                    flag = self.object_collision()
+                else:
+                    flag = False
             if flag:
                 self.object_collision_interval = 1
             else:
                 self.object_collision_interval = 10
         self.object_interval_index += 1
+
+    def rough_box_collision(self):
+        # Quick collision detection using bounding boxes
+        unique_masks, inverse_indices = torch.unique(self.masks, return_inverse=True)
+        num_objects = unique_masks.size(0)
+
+        min_coords = torch.full(
+            (num_objects, 3), float("inf"), dtype=self.x.dtype, device=self.device
+        )
+        max_coords = torch.full(
+            (num_objects, 3), float("-inf"), dtype=self.x.dtype, device=self.device
+        )
+
+        for i in range(num_objects):
+            mask = (inverse_indices == i)
+            min_coords[i] = self.x[mask].min(dim=0)[0]
+            max_coords[i] = self.x[mask].max(dim=0)[0]
+
+        indices = torch.arange(num_objects)
+        i, j = torch.meshgrid(indices, indices)
+        pairs = torch.stack([i.flatten(), j.flatten()], dim=1)
+
+        pairs = pairs[pairs[:, 0] < pairs[:, 1]]
+
+        overlap_x = (max_coords[pairs[:, 0], 0] > min_coords[pairs[:, 1], 0]) & (
+            min_coords[pairs[:, 0], 0] < max_coords[pairs[:, 1], 0]
+        )
+        overlap_y = (max_coords[pairs[:, 0], 1] > min_coords[pairs[:, 1], 1]) & (
+            min_coords[pairs[:, 0], 1] < max_coords[pairs[:, 1], 1]
+        )
+        overlap_z = (max_coords[pairs[:, 0], 2] > min_coords[pairs[:, 1], 2]) & (
+            min_coords[pairs[:, 0], 2] < max_coords[pairs[:, 1], 2]
+        )
+
+        overlap = overlap_x & overlap_y & overlap_z
+
+        return overlap.any()
 
     def object_collision(self):
         collisions = self.collisionDetector.reset(self.x, self.masks)
