@@ -16,21 +16,22 @@ class CollisionDetector:
         self.points = ti.Vector.field(3, dtype=ti.f32, shape=num_points)
         self.points_mask = ti.field(ti.i32, shape=num_points)
 
-        self.max_grid_size = 100
         self.grid = ti.field(ti.i32)
         self.grid_SNodes = ti.root.pointer(
             ti.ijk, (self.grid_count, self.grid_count, self.grid_count)
         )
-        self.block = self.grid_SNodes.dense(ti.l, self.max_grid_size).place(self.grid)
-        self.grid_point_count = ti.field(
-            ti.i32, shape=(self.grid_count, self.grid_count, self.grid_count)
-        )
-        self.grid_point_count.fill(0)
+        self.block = self.grid_SNodes.dynamic(
+            ti.l, self.num_points, chunk_size=32
+        ).place(self.grid)
 
-        self.max_collisions = num_points * 10
-        self.collisions = ti.Vector.field(2, dtype=ti.i32, shape=self.max_collisions)
-        self.collisions_count = ti.field(dtype=ti.i32, shape=())
-        self.collisions_count[None] = 0
+        self.collisions_x = ti.field(ti.i32)
+        self.collision_SNode_x = ti.root.dynamic(
+            ti.i, num_points, chunk_size=32
+        ).place(self.collisions_x)
+        self.collisions_y = ti.field(ti.i32)
+        self.collision_SNode_y = ti.root.dynamic(
+            ti.i, num_points, chunk_size=32
+        ).place(self.collisions_y)
 
     def reset(self, points, points_mask=None):
         if points_mask is not None:
@@ -38,7 +39,6 @@ class CollisionDetector:
         else:
             self.points_mask.fill(1)
         self.points.from_torch(points)
-
         # Have some extra grids to avoid boundary issues
         grid_size = (points.max(0)[0] - points.min(0)[0]) / (self.grid_count - 10)
         self.grid_size = ti.Vector(
@@ -56,13 +56,9 @@ class CollisionDetector:
             ]
         )
         ti.deactivate_all_snodes()
-        self.grid_point_count.fill(0)
-        self.collisions_count[None] = 0
         self.assign_points_to_grid()
-        self.detect_collisions()
-        collisions = self.collisions.to_torch(device="cuda")[
-            : self.collisions_count[None]
-        ]
+        collision_len = self.detect_collisions()
+        collisions = self.get_collisions(collision_len)
         return collisions
 
     @ti.kernel
@@ -70,10 +66,7 @@ class CollisionDetector:
         for i in range(self.num_points):
             cell = ((self.points[i] - self.lower_bound) / self.grid_size).cast(ti.i32)
             cell = ti.max(ti.min(cell, self.grid_count - 1), 0)
-            index = ti.atomic_add(self.grid_point_count[cell[0], cell[1], cell[2]], 1)
-            if index >= self.max_grid_size:
-                print("Warning: Too many points in a cell !!!!!!!!!!!!")
-            self.grid[cell[0], cell[1], cell[2], index] = i
+            self.grid[cell[0], cell[1], cell[2]].append(i)
 
     @ti.func
     def check_collision(self, p1, p2):
@@ -82,9 +75,9 @@ class CollisionDetector:
         )
 
     @ti.kernel
-    def detect_collisions(self):
+    def detect_collisions(self) -> ti.i32:
         for i, j, k in self.grid_SNodes:
-            length = self.grid_point_count[i, j, k]
+            length = self.grid[i, j, k].length()
             if length > 0:
                 # Check collisions within the same cell
                 for ii in range(length):
@@ -92,15 +85,13 @@ class CollisionDetector:
                     for jj in range(ii + 1, length):
                         p2 = self.grid[i, j, k, jj]
                         if self.check_collision(p1, p2):
-                            index = ti.atomic_add(self.collisions_count[None], 1)
-                            if index >= self.max_collisions:
-                                print("Warning: Too many collisions !!!!!!!!!!!!")
                             if p1 < p2:
-                                self.collisions[index][0] = p1
-                                self.collisions[index][1] = p2
+                                self.collisions_x.append(p1)
+                                self.collisions_y.append(p2)
                             else:
-                                self.collisions[index][0] = p2
-                                self.collisions[index][1] = p1
+                                self.collisions_x.append(p2)
+                                self.collisions_y.append(p1)
+
                 # Check collisions with neighboring cells
                 for di, dj, dk in ti.ndrange((-1, 2), (-1, 2), (-1, 2)):
                     if di == 0 and dj == 0 and dk == 0:
@@ -110,23 +101,32 @@ class CollisionDetector:
                         0 <= ni < self.grid_count
                         and 0 <= nj < self.grid_count
                         and 0 <= nk < self.grid_count
-                        and self.grid_point_count[ni, nj, nk] > 0
+                        and self.grid[ni, nj, nk].length() > 0
                     ):
-                        neighbor_length = self.grid_point_count[ni, nj, nk]
+                        neighbor_length = self.grid[ni, nj, nk].length()
                         for ii in range(length):
                             p1 = self.grid[i, j, k, ii]
                             for jj in range(neighbor_length):
                                 p2 = self.grid[ni, nj, nk, jj]
                                 if p1 < p2 and self.check_collision(p1, p2):
-                                    index = ti.atomic_add(
-                                        self.collisions_count[None], 1
-                                    )
-                                    if index >= self.max_collisions:
-                                        print(
-                                            "Warning: Too many collisions !!!!!!!!!!!!"
-                                        )
-                                    self.collisions[index][0] = p1
-                                    self.collisions[index][1] = p2
+                                    self.collisions_x.append(p1)
+                                    self.collisions_y.append(p2)
+
+        return self.collisions_x.length()
+
+    @ti.kernel
+    def extract_collisions(self, buffer: ti.types.ndarray(ti.i32, ndim=2)):
+        for i in range(self.collisions_x.length()):
+            buffer[i, 0] = self.collisions_x[i]
+            buffer[i, 1] = self.collisions_y[i]
+
+    def get_collisions(self, collision_len):
+        collisions_torch = torch.zeros(
+            (collision_len, 2), dtype=torch.int32, device="cuda"
+        )
+        self.extract_collisions(collisions_torch)
+        print(collision_len)
+        return torch.unique(collisions_torch, dim=0)
 
 
 def test1():
@@ -175,4 +175,4 @@ def test1():
     # o3d.visualization.draw_geometries([pcd] + spheres)
 
 
-# test1()
+test1()

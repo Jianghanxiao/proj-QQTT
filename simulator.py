@@ -191,7 +191,7 @@ def demo2():
     spring_Y = []
     init_masks = []
 
-    for i in range(2):
+    for i in range(5):
         teddy = o3d.io.read_point_cloud(
             f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/table.ply"
         )
