@@ -89,7 +89,8 @@ class SpringMassSystem(nn.Module):
         self.dashpot_damping = dashpot_damping
         self.drag_damping = drag_damping
 
-        self.collisionDetector = CollisionDetector(len(self.x), 0.05)
+        self.collision_dist = 0.05
+        self.collisionDetector = CollisionDetector(len(self.x), self.collision_dist)
         self.object_collision_interval = 10
         self.object_interval_index = 0
 
@@ -210,19 +211,25 @@ class SpringMassSystem(nn.Module):
             self.max_coords[i] = self.x[self.object_masks[i]].max(dim=0)[0]
 
         overlap_x = (
-            self.max_coords[self.pairs[:, 0], 0] > self.min_coords[self.pairs[:, 1], 0]
+            self.max_coords[self.pairs[:, 0], 0] + self.collision_dist
+            >= self.min_coords[self.pairs[:, 1], 0]
         ) & (
-            self.min_coords[self.pairs[:, 0], 0] < self.max_coords[self.pairs[:, 1], 0]
+            self.min_coords[self.pairs[:, 0], 0]
+            <= self.max_coords[self.pairs[:, 1], 0] + self.collision_dist
         )
         overlap_y = (
-            self.max_coords[self.pairs[:, 0], 1] > self.min_coords[self.pairs[:, 1], 1]
+            self.max_coords[self.pairs[:, 0], 1] + self.collision_dist
+            >= self.min_coords[self.pairs[:, 1], 1]
         ) & (
-            self.min_coords[self.pairs[:, 0], 1] < self.max_coords[self.pairs[:, 1], 1]
+            self.min_coords[self.pairs[:, 0], 1]
+            <= self.max_coords[self.pairs[:, 1], 1] + self.collision_dist
         )
         overlap_z = (
-            self.max_coords[self.pairs[:, 0], 2] > self.min_coords[self.pairs[:, 1], 2]
+            self.max_coords[self.pairs[:, 0], 2] + self.collision_dist
+            >= self.min_coords[self.pairs[:, 1], 2]
         ) & (
-            self.min_coords[self.pairs[:, 0], 2] < self.max_coords[self.pairs[:, 1], 2]
+            self.min_coords[self.pairs[:, 0], 2]
+            <= self.max_coords[self.pairs[:, 1], 2] + self.collision_dist
         )
 
         overlap = overlap_x & overlap_y & overlap_z
