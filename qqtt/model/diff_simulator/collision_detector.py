@@ -16,7 +16,7 @@ class CollisionDetector:
         self.points = ti.Vector.field(3, dtype=ti.f32, shape=num_points)
         self.points_mask = ti.field(ti.i32, shape=num_points)
 
-        self.max_grid_size = 100
+        self.max_grid_size = 500
         self.grid = ti.field(ti.i32)
         self.grid_SNodes = ti.root.pointer(
             ti.ijk, (self.grid_count, self.grid_count, self.grid_count)
