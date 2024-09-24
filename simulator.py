@@ -89,37 +89,38 @@ def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display
             visualize=True,
         )
     else:
-        lineset, pcd = get_spring_mass_visual(
-            init_vertices.cpu().numpy(),
-            init_springs.cpu().numpy(),
-            init_rest_lengths.cpu().numpy(),
-            spring_forces=np.zeros(len(init_springs)),
-            spring_isbreak=np.zeros(len(init_springs)),
-        )
+        if display == "online":
+            lineset, pcd = get_spring_mass_visual(
+                init_vertices.cpu().numpy(),
+                init_springs.cpu().numpy(),
+                init_rest_lengths.cpu().numpy(),
+                spring_forces=np.zeros(len(init_springs)),
+                spring_isbreak=np.zeros(len(init_springs)),
+            )
 
-        vis = o3d.visualization.Visualizer()
-        vis.create_window()
-        vis.add_geometry(lineset)
-        vis.add_geometry(pcd)
-        # Define ground plane vertices
-        ground_vertices = np.array(
-            [[10, 10, 0], [10, -10, 0], [-10, -10, 0], [-10, 10, 0]]
-        )
+            vis = o3d.visualization.Visualizer()
+            vis.create_window()
+            vis.add_geometry(lineset)
+            vis.add_geometry(pcd)
+            # Define ground plane vertices
+            ground_vertices = np.array(
+                [[10, 10, 0], [10, -10, 0], [-10, -10, 0], [-10, 10, 0]]
+            )
 
-        # Define ground plane triangular faces
-        ground_triangles = np.array([[0, 2, 1], [0, 3, 2]])
+            # Define ground plane triangular faces
+            ground_triangles = np.array([[0, 2, 1], [0, 3, 2]])
 
-        # Create Open3D mesh object
-        ground_mesh = o3d.geometry.TriangleMesh()
-        ground_mesh.vertices = o3d.utility.Vector3dVector(ground_vertices)
-        ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)
-        ground_mesh.paint_uniform_color([1, 211 / 255, 139 / 255])
-        vis.add_geometry(ground_mesh)
+            # Create Open3D mesh object
+            ground_mesh = o3d.geometry.TriangleMesh()
+            ground_mesh.vertices = o3d.utility.Vector3dVector(ground_vertices)
+            ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)
+            ground_mesh.paint_uniform_color([1, 211 / 255, 139 / 255])
+            vis.add_geometry(ground_mesh)
 
-        view_control = vis.get_view_control()
-        view_control.set_front([-1, 0, 0.5])
-        view_control.set_up([0, 0, 1])
-        view_control.set_zoom(3)
+            view_control = vis.get_view_control()
+            view_control.set_front([-1, 0, 0.5])
+            view_control.set_up([0, 0, 1])
+            view_control.set_zoom(3)
 
         start = time.time()
 
@@ -127,29 +128,32 @@ def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display
             print(i, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             print(time.time()-start)
             vertices, springs, rest_lengths, spring_forces = simulator.step()
-            new_lineset, new_pcd = get_spring_mass_visual(
-                vertices.cpu().numpy(),
-                springs.cpu().numpy(),
-                rest_lengths.cpu().numpy(),
-                spring_forces.cpu().numpy(),
-                spring_isbreak=np.zeros(len(init_springs)),
-            )
-            lineset.points = new_lineset.points
-            lineset.lines = new_lineset.lines
-            lineset.colors = new_lineset.colors
-            pcd.points = new_pcd.points
-            vis.update_geometry(lineset)
-            vis.update_geometry(pcd)
+            if display == "online":
+                new_lineset, new_pcd = get_spring_mass_visual(
+                    vertices.cpu().numpy(),
+                    springs.cpu().numpy(),
+                    rest_lengths.cpu().numpy(),
+                    spring_forces.cpu().numpy(),
+                    spring_isbreak=np.zeros(len(init_springs)),
+                )
+                lineset.points = new_lineset.points
+                lineset.lines = new_lineset.lines
+                lineset.colors = new_lineset.colors
+                pcd.points = new_pcd.points
+                vis.update_geometry(lineset)
+                vis.update_geometry(pcd)
 
-            vis.poll_events()
-            vis.update_renderer()
+                vis.poll_events()
+                vis.update_renderer()
 
-        vis.destroy_window()
+        if display == "online":
+            vis.destroy_window()
 
 
 def demo1():
     cfg.device = "cuda"
-    display = "online"
+    # Choices are "offline", "online", "online_no_vis"
+    display = "online_no_vis"
     # Load the teddy into taichi and create a simple spring-mass system
     teddy = o3d.io.read_point_cloud(
         "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/teddy.ply"
