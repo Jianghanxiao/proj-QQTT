@@ -26,7 +26,7 @@ class SpringMassSystem(nn.Module):
         drag_damping,
         collide_object_elas=0.7,
         collide_object_fric=0.3,
-        init_velocities = None,
+        init_velocities=None,
     ):
         logger.info(f"[SIMULATION]: Initialize the Spring-Mass System")
         super().__init__()
@@ -120,7 +120,14 @@ class SpringMassSystem(nn.Module):
         pairs = torch.stack([i.flatten(), j.flatten()], dim=1)
         self.pairs = pairs[pairs[:, 0] < pairs[:, 1]]
 
-    def reset_system(self, init_vertices, init_springs, init_rest_lengths, init_masses, initial_velocities=None):
+    def reset_system(
+        self,
+        init_vertices,
+        init_springs,
+        init_rest_lengths,
+        init_masses,
+        initial_velocities=None,
+    ):
         logger.info(f"[SIMULATION]: Reset the Spring-Mass System")
         self.x = init_vertices
         if initial_velocities is not None:
