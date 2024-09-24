@@ -5,6 +5,7 @@ import torch
 from qqtt.utils import visualize_pc, cfg
 import time
 
+
 def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20, device="cuda"):
     pcd_tree = o3d.geometry.KDTreeFlann(pcd)
     points = np.asarray(pcd.points)
@@ -82,10 +83,10 @@ def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display
         vertices = [init_vertices.cpu()]
         for i in range(200):
             print("Step: ", i)
-            print(time.time()-start)
+            print(time.time() - start)
             x, _, _, _ = simulator.step()
             vertices.append(x.cpu())
-        print(time.time()-start)
+        print(time.time() - start)
         vertices = torch.stack(vertices, dim=0)
         visualize_pc(
             vertices,
@@ -128,7 +129,7 @@ def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display
 
         for i in range(500):
             print(i, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            print(time.time()-start)
+            print(time.time() - start)
             vertices, springs, rest_lengths, spring_forces = simulator.step()
             new_lineset, new_pcd = get_spring_mass_visual(
                 vertices.cpu().numpy(),
@@ -198,7 +199,7 @@ def demo2():
         teddy = o3d.io.read_point_cloud(
             f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/table.ply"
         )
-        teddy.translate([0, 0.3*i, 1*(i+1)])
+        teddy.translate([0, 0.3 * i, 1 * (i + 1)])
         # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1)
         # o3d.visualization.draw_geometries([teddy, coordinate])
         init_vertices_, init_springs_, init_rest_lengths_, init_masses_, spring_Y_ = (
@@ -206,11 +207,13 @@ def demo2():
         )
         len_vert = len(init_vertices_)
         init_vertices.append(init_vertices_)
-        init_springs.append(init_springs_ + i*len(init_vertices_))
+        init_springs.append(init_springs_ + i * len(init_vertices_))
         init_rest_lengths.append(init_rest_lengths_)
         init_masses.append(init_masses_)
         spring_Y.append(spring_Y_)
-        init_masks.append(torch.ones(len_vert, device=cfg.device, dtype=torch.int32) * i)
+        init_masks.append(
+            torch.ones(len_vert, device=cfg.device, dtype=torch.int32) * i
+        )
 
     init_vertices = torch.cat(init_vertices, dim=0)
     init_springs = torch.cat(init_springs, dim=0)
@@ -218,7 +221,6 @@ def demo2():
     init_masses = torch.cat(init_masses, dim=0)
     spring_Y = torch.cat(spring_Y, dim=0)
     init_masks = torch.cat(init_masks, dim=0)
-
 
     with torch.no_grad():
         simulator = SpringMassSystem(
@@ -239,6 +241,107 @@ def demo2():
         visualize(init_vertices, init_springs, init_rest_lengths, simulator, display)
 
 
+def generate_data_billiard():
+    cfg.device = "cuda"
+    display = "online"
+
+    radius = 0.1
+    spacing = 0.02
+
+    def generate_solid_sphere(radius, spacing):
+        x = np.arange(-radius, radius + spacing, spacing)
+        y = np.arange(-radius, radius + spacing, spacing)
+        z = np.arange(-radius, radius + spacing, spacing)
+        xv, yv, zv = np.meshgrid(x, y, z, indexing="ij")
+        points = np.vstack((xv.flatten(), yv.flatten(), zv.flatten())).T
+        points = points[np.linalg.norm(points, axis=1) <= radius]
+        return points
+
+    solid_sphere_points = generate_solid_sphere(radius, spacing)
+    solid_sphere_points[:, 2] += radius + 0.01
+
+    init_vertices = []
+    init_springs = []
+    init_rest_lengths = []
+    init_masses = []
+    spring_Y = []
+    init_masks = []
+    init_velocities = []
+
+    pose = torch.tensor(
+        [
+            [-1, 0, 0],
+            [-(1 + 2 * radius), radius, 0],
+            [-(1 + 2 * radius), -radius, 0],
+            [-(1 + 4 * radius), 0, 0],
+            [-(1 + 4 * radius), 2 * radius, 0],
+            [-(1 + 4 * radius), -2 * radius, 0],
+            [1, 0, 0],
+        ],
+        device=cfg.device,
+        dtype=torch.float32,
+    )
+
+    for i in range(len(pose)):
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(np.copy(solid_sphere_points))
+        init_vertices_, init_springs_, init_rest_lengths_, init_masses_, spring_Y_ = (
+            get_spring_mass_from_pcd(pcd)
+        )
+
+        init_vertices_ += pose[i]
+        len_vert = len(init_vertices_)
+        if i == len(pose) - 1:
+            init_velocities_ = torch.zeros(
+                (len_vert, 3), device=cfg.device
+            ) + torch.tensor([-30, 0, 0], device=cfg.device, dtype=torch.float32)
+        else:
+            init_velocities_ = torch.zeros((len_vert, 3), device=cfg.device)
+
+        init_vertices.append(init_vertices_)
+        init_springs.append(init_springs_ + i * len(init_vertices_))
+        init_rest_lengths.append(init_rest_lengths_)
+        init_masses.append(init_masses_)
+        spring_Y.append(spring_Y_)
+        init_masks.append(
+            torch.ones(len_vert, device=cfg.device, dtype=torch.int32) * i
+        )
+        init_velocities.append(init_velocities_)
+
+    init_vertices = torch.cat(init_vertices, dim=0)
+    init_springs = torch.cat(init_springs, dim=0)
+    init_rest_lengths = torch.cat(init_rest_lengths, dim=0)
+    init_masses = torch.cat(init_masses, dim=0)
+    spring_Y = torch.cat(spring_Y, dim=0)
+    init_masks = torch.cat(init_masks, dim=0)
+    init_velocities = torch.cat(init_velocities, dim=0)
+
+    with torch.no_grad():
+        simulator = SpringMassSystem(
+            init_vertices,
+            init_springs,
+            init_rest_lengths,
+            init_masses,
+            init_masks,
+            dt=5e-5,
+            num_substeps=100,
+            spring_Y=3e5,
+            collide_elas=0.8,
+            collide_fric=0.2,
+            dashpot_damping=100,
+            drag_damping=1,
+            collide_object_elas=0.95,
+            collide_object_fric=0.1,
+            init_velocities=init_velocities,
+        )
+
+        visualize(init_vertices, init_springs, init_rest_lengths, simulator, display)
+    import pdb
+
+    pdb.set_trace()
+
+
 if __name__ == "__main__":
     # demo1()
-    demo2()
+    # demo2()
+    generate_data_billiard()
