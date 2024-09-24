@@ -77,11 +77,19 @@ def get_spring_mass_visual(
     return visuals
 
 
-def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display):
+def visualize(
+    init_vertices,
+    init_springs,
+    init_rest_lengths,
+    simulator,
+    display,
+    frame_len=200,
+    save=False,
+):
     if display == "offline":
         start = time.time()
         vertices = [init_vertices.cpu()]
-        for i in range(200):
+        for i in range(frame_len):
             print("Step: ", i)
             print(time.time() - start)
             x, _, _, _ = simulator.step()
@@ -92,6 +100,10 @@ def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display
             vertices,
             visualize=True,
         )
+        if save:
+            points_trajectories = vertices.cpu().numpy()
+            return points_trajectories
+
     else:
         lineset, pcd = get_spring_mass_visual(
             init_vertices.cpu().numpy(),
@@ -127,7 +139,10 @@ def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display
 
         start = time.time()
 
-        for i in range(500):
+        if save:
+            points_trajectories = [init_vertices.cpu().numpy()]
+
+        for i in range(frame_len):
             print(i, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             print(time.time() - start)
             vertices, springs, rest_lengths, spring_forces = simulator.step()
@@ -138,6 +153,10 @@ def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display
                 spring_forces.cpu().numpy(),
                 spring_isbreak=np.zeros(len(init_springs)),
             )
+
+            if save:
+                points_trajectories.append(vertices.cpu().numpy())
+
             lineset.points = new_lineset.points
             lineset.lines = new_lineset.lines
             lineset.colors = new_lineset.colors
@@ -149,6 +168,9 @@ def visualize(init_vertices, init_springs, init_rest_lengths, simulator, display
             vis.update_renderer()
 
         vis.destroy_window()
+        if save:
+            points_trajectories = np.array(points_trajectories)
+            return points_trajectories
 
 
 def demo1():
@@ -335,10 +357,16 @@ def generate_data_billiard():
             init_velocities=init_velocities,
         )
 
-        visualize(init_vertices, init_springs, init_rest_lengths, simulator, display)
-    import pdb
-
-    pdb.set_trace()
+        points_trajectories = visualize(
+            init_vertices,
+            init_springs,
+            init_rest_lengths,
+            simulator,
+            display,
+            frame_len=50,
+            save=True,
+        )
+        np.save(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard.npy", points_trajectories)
 
 
 if __name__ == "__main__":
