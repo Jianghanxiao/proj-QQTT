@@ -10,13 +10,25 @@ import os
 
 
 class InvPhyTrainer:
-    def __init__(self, data_path, base_dir, device="cuda:0"):
+    def __init__(
+        self, data_path, base_dir, mask_path=None, velocity_path=None, device="cuda:0"
+    ):
         cfg.data_path = data_path
         cfg.base_dir = base_dir
         cfg.device = device
         cfg.run_name = base_dir.split("/")[-1]
         # Load the data
         self.dataset = SimpleData(visualize=False)
+        self.init_masks = None
+        self.init_velocities = None
+        if mask_path is not None:
+            mask = np.load(mask_path)
+            self.init_masks = torch.tensor(mask, dtype=torch.float32, device=cfg.device)
+        if velocity_path is not None:
+            velocity = np.load(velocity_path)
+            self.init_velocities = torch.tensor(
+                velocity, dtype=torch.float32, device=cfg.device
+            )
         # Initialize the vertices, springs, rest lengths and masses
         (
             self.init_vertices,
@@ -24,7 +36,10 @@ class InvPhyTrainer:
             self.init_rest_lengths,
             self.init_masses,
         ) = self._init_start(
-            self.dataset.data[0], radius=cfg.radius, max_neighbours=cfg.max_neighbours
+            self.dataset.data[0],
+            radius=cfg.radius,
+            max_neighbours=cfg.max_neighbours,
+            mask=self.init_masks,
         )
         # Initialize the physical simulator
         self.simulator = SpringMassSystem(
@@ -39,6 +54,10 @@ class InvPhyTrainer:
             collide_fric=cfg.init_collide_fric,
             dashpot_damping=cfg.dashpot_damping,
             drag_damping=cfg.drag_damping,
+            collide_object_elas=cfg.collide_object_elas,
+            collide_object_fric=cfg.collide_object_fric,
+            init_masks=self.init_masks,
+            init_velocities=self.init_velocities,
         )
         self.optimizer = torch.optim.Adam(
             self.simulator.parameters(), lr=cfg.base_lr, betas=(0.9, 0.99)
@@ -46,7 +65,7 @@ class InvPhyTrainer:
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
-                project="teddy_twoK",
+                project="billiard",
                 name=cfg.run_name,
                 config=cfg.to_dict(),
             )
@@ -61,37 +80,83 @@ class InvPhyTrainer:
             # Create directory if it doesn't exist
             os.makedirs(f"{cfg.base_dir}/train")
 
-    def _init_start(self, pc, radius=0.1, max_neighbours=20):
-        # Connect the springs based on the point cloud
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(pc.cpu().numpy())
-        # Find the nearest neighbours to connect the springs
-        pcd_tree = o3d.geometry.KDTreeFlann(pcd)
-        points = np.asarray(pcd.points)
-        spring_flags = np.zeros((len(points), len(points)))
-        springs = []
-        rest_lengths = []
-        vertices = points  # Use the points as the vertices of the springs
-        for i in range(len(vertices)):
-            [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
-                points[i], radius, max_neighbours
+    def _init_start(self, pc, radius=0.1, max_neighbours=20, mask=None):
+        if mask is None:
+            # Connect the springs based on the point cloud
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(pc.cpu().numpy())
+            # Find the nearest neighbours to connect the springs
+            pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+            points = np.asarray(pcd.points)
+            spring_flags = np.zeros((len(points), len(points)))
+            springs = []
+            rest_lengths = []
+            for i in range(len(points)):
+                [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
+                    points[i], radius, max_neighbours
+                )
+                idx = idx[1:]
+                for j in idx:
+                    if spring_flags[i, j] == 0 and spring_flags[j, i] == 0:
+                        spring_flags[i, j] = 1
+                        spring_flags[j, i] = 1
+                        springs.append([i, j])
+                        rest_lengths.append(np.linalg.norm(points[i] - points[j]))
+            springs = np.array(springs)
+            rest_lengths = np.array(rest_lengths)
+            masses = np.ones(len(points))
+            return (
+                torch.tensor(points, dtype=torch.float32, device=cfg.device),
+                torch.tensor(springs, dtype=torch.int32, device=cfg.device),
+                torch.tensor(rest_lengths, dtype=torch.float32, device=cfg.device),
+                torch.tensor(masses, dtype=torch.float32, device=cfg.device),
             )
-            idx = idx[1:]
-            for j in idx:
-                if spring_flags[i, j] == 0 and spring_flags[j, i] == 0:
-                    spring_flags[i, j] = 1
-                    spring_flags[j, i] = 1
-                    springs.append([i, j])
-                    rest_lengths.append(np.linalg.norm(points[i] - points[j]))
-        springs = np.array(springs)
-        rest_lengths = np.array(rest_lengths)
-        masses = np.ones(len(vertices))
-        return (
-            torch.tensor(vertices, dtype=torch.float32, device=cfg.device),
-            torch.tensor(springs, dtype=torch.int32, device=cfg.device),
-            torch.tensor(rest_lengths, dtype=torch.float32, device=cfg.device),
-            torch.tensor(masses, dtype=torch.float32, device=cfg.device),
-        )
+        else:
+            mask = mask.cpu().numpy()
+            points = pc.cpu().numpy()
+            # Get the unique value in masks and loop
+            unique_values = np.unique(mask)
+            vertices = []
+            springs = []
+            rest_lengths = []
+            index = 0
+            for value in unique_values:
+                temp_points = points[mask == value]
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(temp_points)
+                pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+                spring_flags = np.zeros((len(temp_points), len(temp_points)))
+                temp_springs = []
+                temp_rest_lengths = []
+                for i in range(len(temp_points)):
+                    [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
+                        temp_points[i], radius, max_neighbours
+                    )
+                    idx = idx[1:]
+                    for j in idx:
+                        if spring_flags[i, j] == 0 and spring_flags[j, i] == 0:
+                            spring_flags[i, j] = 1
+                            spring_flags[j, i] = 1
+                            temp_springs.append([i + index, j + index])
+                            temp_rest_lengths.append(
+                                np.linalg.norm(temp_points[i] - temp_points[j])
+                            )
+                vertices += temp_points.tolist()
+                springs += temp_springs
+                rest_lengths += temp_rest_lengths
+                index += len(temp_points)
+
+            vertices = np.array(vertices)
+            springs = np.array(springs)
+            rest_lengths = np.array(rest_lengths)
+            masses = np.ones(len(points))
+
+            return (
+                torch.tensor(vertices, dtype=torch.float32, device=cfg.device),
+                torch.tensor(springs, dtype=torch.int32, device=cfg.device),
+                torch.tensor(rest_lengths, dtype=torch.float32, device=cfg.device),
+                torch.tensor(masses, dtype=torch.float32, device=cfg.device),
+            )
 
     def train(self, start_epoch=-1):
         best_loss = None
@@ -99,10 +164,15 @@ class InvPhyTrainer:
         # Train the model with the physical simulator
         for i in range(start_epoch + 1, cfg.iterations):
             self.simulator.reset_system(
-                self.init_vertices,
-                self.init_springs,
-                self.init_rest_lengths,
-                self.init_masses,
+                self.init_vertices.clone(),
+                self.init_springs.clone(),
+                self.init_rest_lengths.clone(),
+                self.init_masses.clone(),
+                initial_velocities=(
+                    self.init_velocities.clone()
+                    if self.init_velocities is not None
+                    else None
+                ),
             )
             total_loss = 0.0
             for j in range(1, self.dataset.frame_len):
@@ -113,12 +183,19 @@ class InvPhyTrainer:
                 self.optimizer.step()
                 self.simulator.detach()
                 total_loss += loss.item()
+                # if torch.isnan(self.simulator.spring_Y.grad).sum() > 0:
+                #     print(torch.isnan(self.simulator.spring_Y.grad).sum())
+                #     print("Nan detected for spring_Y")
+                #     import pdb
+                #     pdb.set_trace()
             total_loss /= self.dataset.frame_len - 1
             wandb.log(
                 {
                     "loss": total_loss,
                     "collide_else": self.simulator.collide_elas.item(),
                     "collide_fric": self.simulator.collide_fric.item(),
+                    "collide_object_elas": self.simulator.collide_object_elas.item(),
+                    "collide_object_fric": self.simulator.collide_object_fric.item(),
                     "iteration": i,
                 }
             )
@@ -198,10 +275,15 @@ class InvPhyTrainer:
         with torch.no_grad():
             # Need to reset the simulator to the initial state
             self.simulator.reset_system(
-                self.init_vertices,
-                self.init_springs,
-                self.init_rest_lengths,
-                self.init_masses,
+                self.init_vertices.clone(),
+                self.init_springs.clone(),
+                self.init_rest_lengths.clone(),
+                self.init_masses.clone(),
+                initial_velocities=(
+                    self.init_velocities.clone()
+                    if self.init_velocities is not None
+                    else None
+                ),
             )
 
             vertices = [self.init_vertices.cpu()]

@@ -72,7 +72,7 @@ class CollisionDetector:
             cell = ti.max(ti.min(cell, self.grid_count - 1), 0)
             index = ti.atomic_add(self.grid_point_count[cell[0], cell[1], cell[2]], 1)
             if index >= self.max_grid_size:
-                print("Warning: Too many points in a cell !!!!!!!!!!!!")
+                print(f"Warning: Too many points ({index}) in a cell !!!!!!!!!!!!")
             self.grid[cell[0], cell[1], cell[2], index] = i
 
     @ti.func
@@ -94,7 +94,7 @@ class CollisionDetector:
                         if self.check_collision(p1, p2):
                             index = ti.atomic_add(self.collisions_count[None], 1)
                             if index >= self.max_collisions:
-                                print("Warning: Too many collisions !!!!!!!!!!!!")
+                                print(f"Warning: Too many collisions ({index}) !!!!!!!!!!!!")
                             if p1 < p2:
                                 self.collisions[index][0] = p1
                                 self.collisions[index][1] = p2

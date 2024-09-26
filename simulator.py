@@ -280,7 +280,7 @@ def generate_data_billiard():
         return points
 
     solid_sphere_points = generate_solid_sphere(radius, spacing)
-    solid_sphere_points[:, 2] += radius + 0.01
+    solid_sphere_points[:, 2] += radius 
 
     init_vertices = []
     init_springs = []
@@ -337,6 +337,7 @@ def generate_data_billiard():
     spring_Y = torch.cat(spring_Y, dim=0)
     init_masks = torch.cat(init_masks, dim=0)
     init_velocities = torch.cat(init_velocities, dim=0)
+    save_velocities = init_velocities.clone()
 
     with torch.no_grad():
         simulator = SpringMassSystem(
@@ -344,7 +345,6 @@ def generate_data_billiard():
             init_springs,
             init_rest_lengths,
             init_masses,
-            init_masks,
             dt=5e-5,
             num_substeps=100,
             spring_Y=3e5,
@@ -354,6 +354,7 @@ def generate_data_billiard():
             drag_damping=1,
             collide_object_elas=0.95,
             collide_object_fric=0.1,
+            init_masks=init_masks,
             init_velocities=init_velocities,
         )
 
@@ -366,7 +367,9 @@ def generate_data_billiard():
             frame_len=50,
             save=True,
         )
-        np.save(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard.npy", points_trajectories)
+        # np.save(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard.npy", points_trajectories)
+        # np.save(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard_mask.npy", init_masks.cpu().numpy())
+        # np.save(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard_velocities.npy", save_velocities.cpu().numpy())
 
 
 if __name__ == "__main__":
