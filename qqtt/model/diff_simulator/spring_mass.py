@@ -221,8 +221,6 @@ class SpringMassSystem(nn.Module):
                     flag = self.object_collision()
                 else:
                     if self.rough_box_collision():
-                        # import pdb
-                        # pdb.set_trace()
                         flag = self.object_collision()
                     else:
                         flag = False
@@ -285,9 +283,8 @@ class SpringMassSystem(nn.Module):
         dis = x2 - x1
         relative_velocity = v2 - v1
 
-        collision_normal = dis / torch.max(
-            torch.norm(dis, dim=1, keepdim=True), torch.tensor(1e-6, device=self.device)
-        )
+        collision_normal = dis / torch.norm(dis, dim=1, keepdim=True)
+
         # Only deal with collision when the velocity is going into the object
         with torch.no_grad():
             mask = torch.einsum("ij,ij->i", relative_velocity, collision_normal) < 0
@@ -329,8 +326,25 @@ class SpringMassSystem(nn.Module):
 
         J = impulse_n + impulse_t
 
-        self.v.index_add_(0, idx1, -J / m1[:, None])
-        self.v.index_add_(0, idx2, J / m2[:, None])
+        index_counts = torch.zeros(
+            self.v.size(0), dtype=torch.float32, device=self.device
+        )
+        index_counts.index_add_(
+            0, idx1, torch.ones_like(idx1, dtype=torch.float, device=self.device)
+        )
+        index_counts.index_add_(
+            0, idx2, torch.ones_like(idx2, dtype=torch.float, device=self.device)
+        )
+
+        current_v = torch.zeros(self.v.size(), dtype=torch.float32, device=self.device)
+        current_v.index_add_(0, idx1, -J / m1[:, None])
+        current_v.index_add_(0, idx2, J / m2[:, None])
+
+        current_v /= torch.where(
+            index_counts[:, None] == 0, torch.tensor(1.0), index_counts[:, None]
+        )
+
+        self.v += current_v
 
         return True
 
