@@ -17,4 +17,5 @@ pip install fvcore
 pip install wandb
 pip install moviepy imageio
 conda install -c conda-forge opencv 
+pip install cma
 ```

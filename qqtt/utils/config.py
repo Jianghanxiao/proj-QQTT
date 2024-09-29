@@ -12,12 +12,19 @@ class SimpleConfig:
         self.base_lr = 1e-3
         self.iterations = 500
         self.vis_interval = self.iterations / 10
-        self.init_spring_Y = 3e4
+        self.init_spring_Y = 3e3
         self.init_collide_elas = 0.5
         self.init_collide_fric = 0.3
+        self.collide_object_elas = 0.7
+        self.collide_object_fric = 0.3
 
         self.radius = 0.1
         self.max_neighbours = 20
+
+        self.num_substeps = 100
+
+        # Parameters on whether update the collision parameters
+        self.collision_learn = False
 
     def to_dict(self):
         # Convert the class to dictionary

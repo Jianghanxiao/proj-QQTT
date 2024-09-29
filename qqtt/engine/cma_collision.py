@@ -7,9 +7,10 @@ import torch
 from fvcore.nn import smooth_l1_loss
 import wandb
 import os
+import cma
 
 
-class InvPhyTrainer:
+class InvPhyTrainerCMA:
     def __init__(
         self, data_path, base_dir, mask_path=None, velocity_path=None, device="cuda:0"
     ):
@@ -59,26 +60,6 @@ class InvPhyTrainer:
             init_masks=self.init_masks,
             init_velocities=self.init_velocities,
         )
-        self.optimizer = torch.optim.Adam(
-            self.simulator.parameters(), lr=cfg.base_lr, betas=(0.9, 0.99)
-        )
-        if "debug" not in cfg.run_name:
-            wandb.init(
-                # set the wandb project where this run will be logged
-                project="billiard",
-                name=cfg.run_name,
-                config=cfg.to_dict(),
-            )
-        else:
-            wandb.init(
-                # set the wandb project where this run will be logged
-                project="Debug",
-                name=cfg.run_name,
-                config=cfg.to_dict(),
-            )
-        if not os.path.exists(f"{cfg.base_dir}/train"):
-            # Create directory if it doesn't exist
-            os.makedirs(f"{cfg.base_dir}/train")
 
     def _init_start(self, pc, radius=0.1, max_neighbours=20, mask=None):
         if mask is None:
@@ -158,11 +139,79 @@ class InvPhyTrainer:
                 torch.tensor(masses, dtype=torch.float32, device=cfg.device),
             )
 
-    def train(self, start_epoch=-1):
-        best_loss = None
-        best_epoch = None
-        # Train the model with the physical simulator
-        for i in range(start_epoch + 1, cfg.iterations):
+    def optimize_collision(self, model_path, max_iter=50):
+        # Load the model
+        logger.info(f"Load model from {model_path}")
+        checkpoint = torch.load(model_path, map_location=cfg.device)
+        self.simulator.load_state_dict(checkpoint["model_state_dict"])
+        self.simulator.to(cfg.device)
+
+        init_collide_elas = torch.clamp(self.simulator.collide_elas, 0.0, 1.0).item()
+        init_collide_fric = torch.clamp(self.simulator.collide_fric, 0.0, 2.0).item()
+        init_collide_object_elas = torch.clamp(
+            self.simulator.collide_object_elas, 0.0, 1.0
+        ).item()
+        init_collide_object_fric = torch.clamp(
+            self.simulator.collide_object_fric, 0.0, 2.0
+        ).item()
+
+        x_init = [
+            init_collide_elas,
+            init_collide_fric / 2,
+            init_collide_object_elas,
+            init_collide_object_fric / 2,
+        ]
+        std = 1 / 6
+        es = cma.CMAEvolutionStrategy(x_init, std, {"bounds": [0.0, 1.0], "seed": 42})
+        es.optimize(self.error_func, iterations=max_iter)
+
+        res = es.result
+        optimal_x = np.array(res[0]).astype(np.float32)
+        optimal_error = res[1]
+
+        logger.info(f"Optimal x: {optimal_x}, Optimal error: {optimal_error}")
+        final_collide_elas = optimal_x[0]
+        final_collide_fric = optimal_x[1] * 2
+        final_collide_object_elas = optimal_x[2]
+        final_collide_object_fric = optimal_x[3] * 2
+        logger.info(
+            f"Final collide_elas: {final_collide_elas}, final_collide_fric: {final_collide_fric}, final_collide_object_elas: {final_collide_object_elas}, final_collide_object_fric: {final_collide_object_fric}"
+        )
+        self.simulator.collide_elas.data = torch.tensor(
+            final_collide_elas, dtype=torch.float32, device=cfg.device
+        )
+        self.simulator.collide_fric.data = torch.tensor(
+            final_collide_fric, dtype=torch.float32, device=cfg.device
+        )
+        self.simulator.collide_object_elas.data = torch.tensor(
+            final_collide_object_elas, dtype=torch.float32, device=cfg.device
+        )
+        self.simulator.collide_object_fric.data = torch.tensor(
+            final_collide_object_fric, dtype=torch.float32, device=cfg.device
+        )
+        self.visualize_sim(
+            save_only=True, video_path=os.path.join(cfg.base_dir, "final.mp4")
+        )
+
+    def compute_points_loss(self, gt, x):
+        # Compute the mse loss between the ground truth and the predicted points
+        return smooth_l1_loss(x, gt, beta=1.0, reduction="mean")
+
+    def error_func(self, collision_parameters):
+        with torch.no_grad():
+            self.simulator.collide_elas.data = torch.tensor(
+                collision_parameters[0], dtype=torch.float32, device=cfg.device
+            )
+            self.simulator.collide_fric.data = torch.tensor(
+                collision_parameters[1] * 2, dtype=torch.float32, device=cfg.device
+            )
+            self.simulator.collide_object_elas.data = torch.tensor(
+                collision_parameters[2], dtype=torch.float32, device=cfg.device
+            )
+            self.simulator.collide_object_fric.data = torch.tensor(
+                collision_parameters[3] * 2, dtype=torch.float32, device=cfg.device
+            )
+
             self.simulator.reset_system(
                 self.init_vertices.clone(),
                 self.init_springs.clone(),
@@ -178,97 +227,9 @@ class InvPhyTrainer:
             for j in range(1, self.dataset.frame_len):
                 x, _, _, _ = self.simulator.step()
                 loss = self.compute_points_loss(self.dataset.data[j], x)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-                self.simulator.detach()
                 total_loss += loss.item()
-                # if torch.isnan(self.simulator.spring_Y.grad).sum() > 0:
-                #     print(torch.isnan(self.simulator.spring_Y.grad).sum())
-                #     print("Nan detected for spring_Y")
-                #     import pdb
-                #     pdb.set_trace()
             total_loss /= self.dataset.frame_len - 1
-            wandb.log(
-                {
-                    "loss": total_loss,
-                    "collide_else": self.simulator.collide_elas.item(),
-                    "collide_fric": self.simulator.collide_fric.item(),
-                    "collide_object_elas": self.simulator.collide_object_elas.item(),
-                    "collide_object_fric": self.simulator.collide_object_fric.item(),
-                    "iteration": i,
-                }
-            )
-
-            logger.info(f"[Train]: Iteration: {i}, Loss: {total_loss}")
-
-            if i % cfg.vis_interval == 0 or i == cfg.iterations - 1:
-                video_path = f"{cfg.base_dir}/train/sim_iter{i}.mp4"
-                self.visualize_sim(save_only=True, video_path=video_path)
-                wandb.log(
-                    {
-                        "video": wandb.Video(
-                            video_path,
-                            format="mp4",
-                            fps=cfg.FPS,
-                        ),
-                    },
-                )
-                cur_model = {
-                    "epoch": i,
-                    "model_state_dict": self.simulator.state_dict(),
-                    "optimizer_state_dict": self.optimizer.state_dict(),
-                }
-                if best_loss == None or total_loss < best_loss:
-                    # Remove old best model file if it exists
-                    if best_loss is not None:
-                        old_best_model_path = (
-                            f"{cfg.base_dir}/train/best_{best_epoch}.pth"
-                        )
-                        if os.path.exists(old_best_model_path):
-                            os.remove(old_best_model_path)
-
-                    # Update best loss and best epoch
-                    best_loss = total_loss
-                    best_epoch = i
-
-                    # Save new best model
-                    best_model_path = f"{cfg.base_dir}/train/best_{best_epoch}.pth"
-                    torch.save(cur_model, best_model_path)
-                    logger.info(
-                        f"Latest best model saved: epoch {best_epoch} with loss {best_loss}"
-                    )
-
-                torch.save(cur_model, f"{cfg.base_dir}/train/iter_{i}.pth")
-                logger.info(
-                    f"[Visualize]: Visualize the simulation at iteration {i} and save the model"
-                )
-
-        wandb.finish()
-
-    def compute_points_loss(self, gt, x):
-        # Compute the mse loss between the ground truth and the predicted points
-        return smooth_l1_loss(x, gt, beta=1.0, reduction="mean")
-
-    def test(self, model_path):
-        # Load the model
-        logger.info(f"Load model from {model_path}")
-        checkpoint = torch.load(model_path, map_location=cfg.device)
-        self.simulator.load_state_dict(checkpoint["model_state_dict"])
-        self.simulator.to(cfg.device)
-
-        self.visualize_sim(save_only=False)
-
-    def resume_train(self, model_path):
-        # Load the model
-        checkpoint = torch.load(model_path, map_location=cfg.device)
-        epoch = checkpoint["epoch"]
-        logger.info(f"Continue training with model from {model_path} at epoch {epoch}")
-        self.simulator.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        self.simulator.to(cfg.device)
-
-        self.train(epoch)
+            return total_loss
 
     def visualize_sim(self, save_only=True, video_path=None):
         # Visualize the whole simulation using current set of parameters in the physical simulator
