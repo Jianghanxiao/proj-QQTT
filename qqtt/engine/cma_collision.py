@@ -169,17 +169,17 @@ class InvPhyTrainerCMA:
         optimal_x = np.array(res[0]).astype(np.float32)
         optimal_error = res[1]
 
-        print(f"Optimal x: {optimal_x}, Optimal error: {optimal_error}")
+        logger.info(f"Optimal x: {optimal_x}, Optimal error: {optimal_error}")
         final_collide_elas = optimal_x[0]
         final_collide_fric = optimal_x[1] * 2
         final_collide_object_elas = optimal_x[2]
         final_collide_object_fric = optimal_x[3] * 2
-        print(
+        logger.info(
             f"Final collide_elas: {final_collide_elas}, final_collide_fric: {final_collide_fric}, final_collide_object_elas: {final_collide_object_elas}, final_collide_object_fric: {final_collide_object_fric}"
         )
         self.simulator.collide_elas.data = torch.tensor(
-                final_collide_elas, dtype=torch.float32, device=cfg.device
-            )
+            final_collide_elas, dtype=torch.float32, device=cfg.device
+        )
         self.simulator.collide_fric.data = torch.tensor(
             final_collide_fric, dtype=torch.float32, device=cfg.device
         )
@@ -189,7 +189,9 @@ class InvPhyTrainerCMA:
         self.simulator.collide_object_fric.data = torch.tensor(
             final_collide_object_fric, dtype=torch.float32, device=cfg.device
         )
-        self.visualize_sim(save_only=True, video_path=os.path.join(cfg.base_dir, "final.mp4"))
+        self.visualize_sim(
+            save_only=True, video_path=os.path.join(cfg.base_dir, "final.mp4")
+        )
 
     def compute_points_loss(self, gt, x):
         # Compute the mse loss between the ground truth and the predicted points
@@ -228,7 +230,6 @@ class InvPhyTrainerCMA:
                 total_loss += loss.item()
             total_loss /= self.dataset.frame_len - 1
             return total_loss
-
 
     def visualize_sim(self, save_only=True, video_path=None):
         # Visualize the whole simulation using current set of parameters in the physical simulator
