@@ -69,7 +69,7 @@ class SpringMassSystem(nn.Module):
                 dtype=torch.float32,
                 device=self.device,
             ),
-            requires_grad=True,
+            requires_grad=cfg.collision_learn,
         )
         self.collide_fric = nn.Parameter(
             torch.tensor(
@@ -77,7 +77,7 @@ class SpringMassSystem(nn.Module):
                 dtype=torch.float32,
                 device=self.device,
             ),
-            requires_grad=True,
+            requires_grad=cfg.collision_learn,
         )
 
         # Parameters for the object collision
@@ -87,7 +87,7 @@ class SpringMassSystem(nn.Module):
                 dtype=torch.float32,
                 device=self.device,
             ),
-            requires_grad=True,
+            requires_grad=cfg.collision_learn,
         )
         self.collide_object_fric = nn.Parameter(
             torch.tensor(
@@ -95,7 +95,7 @@ class SpringMassSystem(nn.Module):
                 dtype=torch.float32,
                 device=self.device,
             ),
-            requires_grad=True,
+            requires_grad=cfg.collision_learn,
         )
 
         self.dt = dt

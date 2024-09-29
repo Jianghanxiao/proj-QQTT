@@ -44,7 +44,7 @@ def demo_rigid():
     # trainer.test("/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/rigid/train/iter_199.pth")
 
 def demo_billiard():
-    base_dir = f"experiments/billiard_debug"
+    base_dir = f"experiments/billiard_initial_3e3_not_learn_collision"
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainer(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard.npy",
