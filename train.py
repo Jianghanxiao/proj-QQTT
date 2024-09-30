@@ -1,5 +1,5 @@
 from qqtt import InvPhyTrainer, InvPhyTrainerCMA
-from qqtt.utils import logger
+from qqtt.utils import logger, cfg
 from datetime import datetime
 
 import random
@@ -62,7 +62,7 @@ def demo_billiard():
 
 
 def demo_cma_collision():
-    base_dir = f"experiments/cma_collision_learned_collision"
+    base_dir = f"experiments/cma_collision_non_learned_collision"
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainerCMA(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard.npy",
@@ -70,9 +70,8 @@ def demo_cma_collision():
         velocity_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard_velocities.npy",
         base_dir=base_dir,
     )
-    trainer.optimize_collision(
-        model_path="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_exps/full_collision/billiard_initial_3e3/train/best_250.pth"
-    )
+    cfg.model_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_exps/full_collision/billiard_initial_3e3_not_learn_collision/train/best_350.pth"
+    trainer.optimize_collision(model_path=cfg.model_path)
 
 
 if __name__ == "__main__":

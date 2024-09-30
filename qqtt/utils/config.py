@@ -24,7 +24,7 @@ class SimpleConfig:
         self.num_substeps = 100
 
         # Parameters on whether update the collision parameters
-        self.collision_learn = False
+        self.collision_learn = True
 
     def to_dict(self):
         # Convert the class to dictionary
