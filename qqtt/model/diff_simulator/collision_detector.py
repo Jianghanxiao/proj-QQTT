@@ -134,55 +134,6 @@ class CollisionDetector:
                 self.collisions[index][0] = p1
                 self.collisions[index][1] = p2
 
-    @ti.kernel
-    def detect_collisions_backup(self):
-        for i, j, k in self.grid_SNodes:
-            length = self.grid_point_count[i, j, k]
-            if length > 0:
-                # Check collisions within the same cell
-                for ii in range(length):
-                    p1 = self.grid[i, j, k, ii]
-                    for jj in range(ii + 1, length):
-                        p2 = self.grid[i, j, k, jj]
-                        if self.check_collision(p1, p2):
-                            index = ti.atomic_add(self.collisions_count[None], 1)
-                            if index >= self.max_collisions:
-                                print(
-                                    f"Warning: Too many collisions ({index}) !!!!!!!!!!!!"
-                                )
-                            if p1 < p2:
-                                self.collisions[index][0] = p1
-                                self.collisions[index][1] = p2
-                            else:
-                                self.collisions[index][0] = p2
-                                self.collisions[index][1] = p1
-                # Check collisions with neighboring cells
-                for di, dj, dk in ti.ndrange((-1, 2), (-1, 2), (-1, 2)):
-                    if di == 0 and dj == 0 and dk == 0:
-                        continue
-                    ni, nj, nk = i + di, j + dj, k + dk
-                    if (
-                        0 <= ni < self.grid_count
-                        and 0 <= nj < self.grid_count
-                        and 0 <= nk < self.grid_count
-                        and self.grid_point_count[ni, nj, nk] > 0
-                    ):
-                        neighbor_length = self.grid_point_count[ni, nj, nk]
-                        for ii in range(length):
-                            p1 = self.grid[i, j, k, ii]
-                            for jj in range(neighbor_length):
-                                p2 = self.grid[ni, nj, nk, jj]
-                                if p1 < p2 and self.check_collision(p1, p2):
-                                    index = ti.atomic_add(
-                                        self.collisions_count[None], 1
-                                    )
-                                    if index >= self.max_collisions:
-                                        print(
-                                            "Warning: Too many collisions !!!!!!!!!!!!"
-                                        )
-                                    self.collisions[index][0] = p1
-                                    self.collisions[index][1] = p2
-
 
 def test1():
     seed = 1234
