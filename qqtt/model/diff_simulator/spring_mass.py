@@ -269,6 +269,14 @@ class SpringMassSystem(nn.Module):
                 self.x.detach().clone(), self.masks
             )
 
+        # The most naive collision detection
+        # with torch.no_grad():
+        #     distances = torch.cdist(self.x, self.x)
+        #     collisions = torch.nonzero(
+        #         (distances < self.collision_dist) & (distances > 0.0), as_tuple=False
+        #     )
+        #     collisions = collisions[collisions[:, 0] < collisions[:, 1]]
+
         if len(collisions) == 0:
             return False
 

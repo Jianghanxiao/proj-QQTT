@@ -27,7 +27,12 @@ class CollisionDetector:
         )
         self.grid_point_count.fill(0)
 
-        self.max_collisions = num_points * 10
+        self.potentials = ti.Vector.field(
+            2, dtype=ti.i32, shape=num_points * num_points
+        )
+        self.potential_count = ti.field(dtype=ti.i32, shape=())
+
+        self.max_collisions = num_points * 100
         self.collisions = ti.Vector.field(2, dtype=ti.i32, shape=self.max_collisions)
         self.collisions_count = ti.field(dtype=ti.i32, shape=())
         self.collisions_count[None] = 0
@@ -86,6 +91,54 @@ class CollisionDetector:
         for i, j, k in self.grid_SNodes:
             length = self.grid_point_count[i, j, k]
             if length > 0:
+                # Add collisions within the same cell
+                for ii in range(length):
+                    p1 = self.grid[i, j, k, ii]
+                    for jj in range(ii + 1, length):
+                        p2 = self.grid[i, j, k, jj]
+                        index = ti.atomic_add(self.potential_count[None], 1)
+                        if p1 < p2:
+                            self.potentials[index][0] = p1
+                            self.potentials[index][1] = p2
+                        else:
+                            self.potentials[index][0] = p1
+                            self.potentials[index][1] = p2
+
+                # Add collisions with neighboring cells
+                for di, dj, dk in ti.ndrange((-1, 2), (-1, 2), (-1, 2)):
+                    if di == 0 and dj == 0 and dk == 0:
+                        continue
+                    ni, nj, nk = i + di, j + dj, k + dk
+                    if (
+                        0 <= ni < self.grid_count
+                        and 0 <= nj < self.grid_count
+                        and 0 <= nk < self.grid_count
+                        and self.grid_point_count[ni, nj, nk] > 0
+                    ):
+                        neighbor_length = self.grid_point_count[ni, nj, nk]
+                        for ii in range(length):
+                            p1 = self.grid[i, j, k, ii]
+                            for jj in range(neighbor_length):
+                                p2 = self.grid[ni, nj, nk, jj]
+                                if p1 < p2:
+                                    index = ti.atomic_add(self.potential_count[None], 1)
+                                    self.potentials[index][0] = p1
+                                    self.potentials[index][1] = p2
+
+        for m in ti.ndrange(self.potential_count[None]):
+            p1, p2 = self.potentials[m]
+            if self.check_collision(p1, p2):
+                index = ti.atomic_add(self.collisions_count[None], 1)
+                if index >= self.max_collisions:
+                    print(f"Warning: Too many collisions ({index}) !!!!!!!!!!!!")
+                self.collisions[index][0] = p1
+                self.collisions[index][1] = p2
+
+    @ti.kernel
+    def detect_collisions_backup(self):
+        for i, j, k in self.grid_SNodes:
+            length = self.grid_point_count[i, j, k]
+            if length > 0:
                 # Check collisions within the same cell
                 for ii in range(length):
                     p1 = self.grid[i, j, k, ii]
@@ -94,7 +147,9 @@ class CollisionDetector:
                         if self.check_collision(p1, p2):
                             index = ti.atomic_add(self.collisions_count[None], 1)
                             if index >= self.max_collisions:
-                                print(f"Warning: Too many collisions ({index}) !!!!!!!!!!!!")
+                                print(
+                                    f"Warning: Too many collisions ({index}) !!!!!!!!!!!!"
+                                )
                             if p1 < p2:
                                 self.collisions[index][0] = p1
                                 self.collisions[index][1] = p2

@@ -24,10 +24,12 @@ set_all_seeds(seed)
 def demo_multiple_k():
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/object_collision_debug"
+    cfg.num_substeps = 1000
+    cfg.init_spring_Y = 3e4
+    base_dir = f"experiments/table_check_full"
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainer(
-        data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/teddy_2k.npy",
+        data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/table_2k.npy",
         base_dir=base_dir,
     )
     # trainer.visualize_sim(save_only=False)
@@ -75,7 +77,7 @@ def demo_cma_collision():
 
 
 if __name__ == "__main__":
-    # demo_multiple_k()
+    demo_multiple_k()
     # demo_rigid()
     # demo_billiard()
-    demo_cma_collision()
+    # demo_cma_collision()

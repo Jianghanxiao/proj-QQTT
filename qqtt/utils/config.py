@@ -6,7 +6,7 @@ class SimpleConfig:
     def __init__(self):
         self.FPS = 10
         self.dt = 5e-5
-        self.num_substeps = 1000
+        self.num_substeps = 100
         self.dashpot_damping = 100
         self.drag_damping = 3
         self.base_lr = 1e-3
@@ -20,8 +20,6 @@ class SimpleConfig:
 
         self.radius = 0.1
         self.max_neighbours = 20
-
-        self.num_substeps = 100
 
         # Parameters on whether update the collision parameters
         self.collision_learn = True
