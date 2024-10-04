@@ -51,7 +51,7 @@ def demo_rigid():
 
 
 def demo_billiard():
-    base_dir = f"experiments/billiard_initial_3e3_not_learn_collision"
+    base_dir = f"experiments/billiard_initial_3e3_fix_collision_toi_no_gradient"
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainer(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard.npy",
@@ -60,6 +60,19 @@ def demo_billiard():
         base_dir=base_dir,
     )
     trainer.train()
+    # trainer.test("/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/billiard/train/iter_199.pth")
+
+def demo_billiard_continue():
+    base_dir = f"experiments/billiard_initial_3e3_fix_collision_toi_continue"
+    logger.set_log_file(path=base_dir, name="inv_phy_log")
+    cfg.iterations = 1000
+    trainer = InvPhyTrainer(
+        data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard.npy",
+        mask_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard_mask.npy",
+        velocity_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard_velocities.npy",
+        base_dir=base_dir,
+    )
+    trainer.resume_train(model_path="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/billiard_initial_3e3_fix_collision_toi/train/iter_499.pth")
     # trainer.test("/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/billiard/train/iter_199.pth")
 
 
@@ -77,7 +90,8 @@ def demo_cma_collision():
 
 
 if __name__ == "__main__":
-    demo_multiple_k()
+    # demo_multiple_k()
     # demo_rigid()
     # demo_billiard()
     # demo_cma_collision()
+    demo_billiard_continue()

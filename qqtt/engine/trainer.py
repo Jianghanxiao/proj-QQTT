@@ -65,7 +65,7 @@ class InvPhyTrainer:
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
-                project="billiard",
+                project="billiard_fix",
                 name=cfg.run_name,
                 config=cfg.to_dict(),
             )
@@ -196,8 +196,8 @@ class InvPhyTrainer:
                     "collide_fric": self.simulator.collide_fric.item(),
                     "collide_object_elas": self.simulator.collide_object_elas.item(),
                     "collide_object_fric": self.simulator.collide_object_fric.item(),
-                    "iteration": i,
-                }
+                },
+                step=i,
             )
 
             logger.info(f"[Train]: Iteration: {i}, Loss: {total_loss}")
@@ -213,6 +213,7 @@ class InvPhyTrainer:
                             fps=cfg.FPS,
                         ),
                     },
+                    step=i
                 )
                 cur_model = {
                     "epoch": i,

@@ -207,13 +207,18 @@ class SpringMassSystem(nn.Module):
         self.v *= torch.exp(
             torch.tensor(-self.dt * self.drag_damping, device=self.device)
         )
-        self.x += self.dt * self.v
 
         self.impulse_collision()
+        if self.collision_mask.any():
+            self.x[self.collision_mask] += (
+                self.toi[:, None] * self.v_old[self.collision_mask]
+                + (self.dt - self.toi)[:, None] * self.v[self.collision_mask]
+            )
+
+        self.x[~self.collision_mask] += self.dt * self.v[~self.collision_mask]
 
     def impulse_collision(self):
         # Check collisions with the ground
-        self.ground_collision()
         if not self.no_object_collision:
             if self.object_interval_index % self.object_collision_interval == 0:
                 self.object_interval_index = 0
@@ -229,6 +234,7 @@ class SpringMassSystem(nn.Module):
                 else:
                     self.object_collision_interval = 10
             self.object_interval_index += 1
+        self.ground_collision()
 
     def rough_box_collision(self):
         with torch.no_grad():
@@ -269,7 +275,7 @@ class SpringMassSystem(nn.Module):
                 self.x.detach().clone(), self.masks
             )
 
-        # The most naive collision detection
+        # # The most naive collision detection
         # with torch.no_grad():
         #     distances = torch.cdist(self.x, self.x)
         #     collisions = torch.nonzero(
@@ -295,7 +301,7 @@ class SpringMassSystem(nn.Module):
 
         # Only deal with collision when the velocity is going into the object
         with torch.no_grad():
-            mask = torch.einsum("ij,ij->i", relative_velocity, collision_normal) < 0
+            mask = torch.einsum("ij,ij->i", relative_velocity, collision_normal) < -1e-4
             if not mask.any():
                 return False
         idx1 = idx1[mask]
@@ -357,16 +363,23 @@ class SpringMassSystem(nn.Module):
         return True
 
     def ground_collision(self):
+        self.v_old = self.v.clone()
+
         normal = torch.tensor([0.0, 0.0, 1.0], device=self.device)
 
         # Check which vertices are below the ground and have velocity components going downward
-        collision_mask = (self.x[:, 2] < 0) & (
-            torch.einsum("ij,j->i", self.v, normal) < 0
-        )
+        with torch.no_grad():
+            collision_mask = (self.x[:, 2] + self.v[:, 2] * self.dt < 0) & (
+                torch.einsum("ij,j->i", self.v, normal) < -1e-4
+            )
+            self.collision_mask = collision_mask
 
         if collision_mask.any():
             # Select the vertices that are colliding
             v_i = self.v[collision_mask]
+            
+            # Calculate the time of impact
+            self.toi = -self.x[collision_mask, 2] / v_i[:, 2]
 
             # Calculate normal and tangential components of the velocity
             v_normal = torch.einsum("ij,j->i", v_i, normal)[:, None] * normal
@@ -388,4 +401,3 @@ class SpringMassSystem(nn.Module):
 
             # Update velocities and positions of colliding vertices
             self.v[collision_mask] = v_i_new
-            self.x[collision_mask, 2] = 0

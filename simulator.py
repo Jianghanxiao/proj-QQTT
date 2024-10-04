@@ -143,8 +143,8 @@ def visualize(
             points_trajectories = [init_vertices.cpu().numpy()]
 
         for i in range(frame_len):
-            print(i, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            print(time.time() - start)
+            # print(i, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            # print(time.time() - start)
             vertices, springs, rest_lengths, spring_forces = simulator.step()
             new_lineset, new_pcd = get_spring_mass_visual(
                 vertices.cpu().numpy(),
@@ -166,7 +166,7 @@ def visualize(
 
             vis.poll_events()
             vis.update_renderer()
-
+        print(time.time() - start)
         vis.destroy_window()
         if save:
             points_trajectories = np.array(points_trajectories)
@@ -260,7 +260,14 @@ def demo2():
             drag_damping=1,
         )
 
-        visualize(init_vertices, init_springs, init_rest_lengths, simulator, display)
+        visualize(
+            init_vertices,
+            init_springs,
+            init_rest_lengths,
+            simulator,
+            display,
+            frame_len=200,
+        )
 
 
 def generate_data_billiard():
