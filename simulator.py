@@ -5,8 +5,10 @@ import torch
 from qqtt.utils import visualize_pc, cfg
 import time
 
+spring_index = []
 
 def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20, device="cuda"):
+    global spring_index
     pcd_tree = o3d.geometry.KDTreeFlann(pcd)
     points = np.asarray(pcd.points)
     spring_flags = np.zeros((len(points), len(points)))
@@ -26,6 +28,11 @@ def get_spring_mass_from_pcd(pcd, raidus=0.1, max_neighbours=20, device="cuda"):
                 spring_flags[i, j] = 1
                 spring_flags[j, i] = 1
                 springs.append([i, j])
+                # Manually set two different parameters for the table case
+                if points[i][1] < 0.49:
+                    spring_index.append(0)
+                else:
+                    spring_index.append(1)
                 # Manually set two different k for the table
                 # if points[i][1] < 0.49:
                 #     spring_Y.append(1e4)
@@ -207,8 +214,10 @@ def demo1():
 
 
 def demo2():
+    global spring_index
+
     cfg.device = "cuda"
-    display = "offline"
+    display = "online"
 
     init_vertices = []
     init_springs = []
@@ -217,7 +226,7 @@ def demo2():
     spring_Y = []
     init_masks = []
 
-    for i in range(5):
+    for i in range(1):
         teddy = o3d.io.read_point_cloud(
             f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data/table.ply"
         )
@@ -252,12 +261,15 @@ def demo2():
             init_masses,
             dt=5e-5,
             num_substeps=100,
-            spring_Y=spring_Y,
+            spring_Y=3e4,
             init_masks=init_masks,
             collide_elas=cfg.init_collide_elas,
             collide_fric=cfg.init_collide_fric,
             dashpot_damping=100,
             drag_damping=1,
+            spring_index=torch.tensor(
+                spring_index, dtype=torch.int32, device=cfg.device
+            ),
         )
 
         visualize(
@@ -293,7 +305,6 @@ def generate_data_billiard():
     init_springs = []
     init_rest_lengths = []
     init_masses = []
-    spring_Y = []
     init_masks = []
     init_velocities = []
 
@@ -331,7 +342,6 @@ def generate_data_billiard():
         init_springs.append(init_springs_ + i * len(init_vertices_))
         init_rest_lengths.append(init_rest_lengths_)
         init_masses.append(init_masses_)
-        spring_Y.append(spring_Y_)
         init_masks.append(
             torch.ones(len_vert, device=cfg.device, dtype=torch.int32) * i
         )
@@ -341,7 +351,6 @@ def generate_data_billiard():
     init_springs = torch.cat(init_springs, dim=0)
     init_rest_lengths = torch.cat(init_rest_lengths, dim=0)
     init_masses = torch.cat(init_masses, dim=0)
-    spring_Y = torch.cat(spring_Y, dim=0)
     init_masks = torch.cat(init_masks, dim=0)
     init_velocities = torch.cat(init_velocities, dim=0)
     save_velocities = init_velocities.clone()
@@ -381,5 +390,5 @@ def generate_data_billiard():
 
 if __name__ == "__main__":
     # demo1()
-    # demo2()
-    generate_data_billiard()
+    demo2()
+    # generate_data_billiard()

@@ -28,6 +28,7 @@ class SpringMassSystem(nn.Module):
         init_masks=None,
         init_velocities=None,
         collision_dist=0.04,
+        spring_index=None,
     ):
         logger.info(f"[SIMULATION]: Initialize the Spring-Mass System")
         super().__init__()
@@ -57,9 +58,11 @@ class SpringMassSystem(nn.Module):
         # Internal forces
         self.spring_forces = None
         # Use the log value to make it easier to learn
+        self.spring_index = spring_index
+        unique_num = torch.unique(self.spring_index).size(0)
         self.spring_Y = nn.Parameter(
             torch.log(torch.tensor(spring_Y, dtype=torch.float32, device=self.device))
-            * torch.ones(self.n_springs, dtype=torch.float32, device=self.device),
+            * torch.ones(unique_num, dtype=torch.float32, device=self.device),
             requires_grad=True,
         )
         # Parameters for the ground collision
@@ -188,7 +191,7 @@ class SpringMassSystem(nn.Module):
             torch.norm(dis, dim=1)[:, None], torch.tensor(1e-6, device=self.device)
         )
         self.spring_forces = (
-            torch.exp(self.spring_Y)[:, None]
+            torch.exp(self.spring_Y[self.spring_index])[:, None]
             * (torch.norm(dis, dim=1) / self.rest_lengths - 1)[:, None]
             * d
         )

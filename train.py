@@ -26,7 +26,7 @@ def demo_multiple_k():
     # base_dir = f"experiments/{current_time}"
     cfg.num_substeps = 1000
     cfg.init_spring_Y = 3e4
-    base_dir = f"experiments/table_check_full"
+    base_dir = f"experiments/table_test_two_k"
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainer(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/table_2k.npy",
@@ -90,8 +90,8 @@ def demo_cma_collision():
 
 
 if __name__ == "__main__":
-    # demo_multiple_k()
+    demo_multiple_k()
     # demo_rigid()
     # demo_billiard()
     # demo_cma_collision()
-    demo_billiard_continue()
+    # demo_billiard_continue()

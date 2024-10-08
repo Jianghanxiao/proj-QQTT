@@ -29,6 +29,7 @@ class InvPhyTrainer:
             self.init_velocities = torch.tensor(
                 velocity, dtype=torch.float32, device=cfg.device
             )
+        self.spring_index = []
         # Initialize the vertices, springs, rest lengths and masses
         (
             self.init_vertices,
@@ -58,6 +59,9 @@ class InvPhyTrainer:
             collide_object_fric=cfg.collide_object_fric,
             init_masks=self.init_masks,
             init_velocities=self.init_velocities,
+            spring_index=torch.tensor(
+                self.spring_index, dtype=torch.int32, device=cfg.device
+            ),
         )
         self.optimizer = torch.optim.Adam(
             self.simulator.parameters(), lr=cfg.base_lr, betas=(0.9, 0.99)
@@ -65,7 +69,7 @@ class InvPhyTrainer:
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
-                project="billiard_fix",
+                project="full_collision_test_two_k",
                 name=cfg.run_name,
                 config=cfg.to_dict(),
             )
@@ -101,6 +105,11 @@ class InvPhyTrainer:
                         spring_flags[i, j] = 1
                         spring_flags[j, i] = 1
                         springs.append([i, j])
+                        # Manually set two different parameters for the table case
+                        if points[i][1] < 0.49:
+                            self.spring_index.append(0)
+                        else:
+                            self.spring_index.append(1)
                         rest_lengths.append(np.linalg.norm(points[i] - points[j]))
             springs = np.array(springs)
             rest_lengths = np.array(rest_lengths)
@@ -192,6 +201,8 @@ class InvPhyTrainer:
             wandb.log(
                 {
                     "loss": total_loss,
+                    "sprint_Y_left": torch.exp(self.simulator.spring_Y[0]).item(),
+                    "sprint_Y_right": torch.exp(self.simulator.spring_Y[1]).item(),
                     "collide_else": self.simulator.collide_elas.item(),
                     "collide_fric": self.simulator.collide_fric.item(),
                     "collide_object_elas": self.simulator.collide_object_elas.item(),
@@ -213,7 +224,7 @@ class InvPhyTrainer:
                             fps=cfg.FPS,
                         ),
                     },
-                    step=i
+                    step=i,
                 )
                 cur_model = {
                     "epoch": i,
