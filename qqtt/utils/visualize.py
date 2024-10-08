@@ -6,7 +6,15 @@ import cv2
 from .config import cfg
 
 
-def visualize_pc(pcs, FPS=None, visualize=True, save_video=False, save_path=None):
+def visualize_pc(
+    pcs,
+    FPS=None,
+    visualize=True,
+    save_video=False,
+    save_path=None,
+    springs=None,
+    spring_params=None,
+):
     """
     Visualizes a sequence of point clouds and optionally saves it as a video.
 
@@ -16,7 +24,6 @@ def visualize_pc(pcs, FPS=None, visualize=True, save_video=False, save_path=None
         visualize (bool, optional): Flag to display the visualization window. Default is True.
         save_video (bool, optional): Flag to save the visualization as a video. Default is False.
         save_path (str, optional): Path to save the video if save_video is True. Default is None.
-
     """
     FPS = cfg.FPS if FPS is None else FPS
 
@@ -49,6 +56,17 @@ def visualize_pc(pcs, FPS=None, visualize=True, save_video=False, save_path=None
     pcd.paint_uniform_color([1, 0, 0])
     vis.add_geometry(pcd)
 
+    if springs is not None:
+        assert spring_params is not None
+        assert len(spring_params) == len(springs)
+        lineset = o3d.geometry.LineSet()
+        lineset.points = o3d.utility.Vector3dVector(pcs[0])
+        lineset.lines = o3d.utility.Vector2iVector(springs)
+        lineset.colors = o3d.utility.Vector3dVector(
+            np.array([0.0, 1.0, 0.0]) * spring_params[:, None]
+        )
+        vis.add_geometry(lineset)
+
     # Define ground plane vertices
     ground_vertices = np.array([[10, 10, 0], [10, -10, 0], [-10, -10, 0], [-10, 10, 0]])
     # Define ground plane triangular faces
@@ -67,6 +85,9 @@ def visualize_pc(pcs, FPS=None, visualize=True, save_video=False, save_path=None
     for i in range(1, pcs.shape[0]):
         pcd.points = o3d.utility.Vector3dVector(pcs[i])
         vis.update_geometry(pcd)
+        if springs is not None:
+            lineset.points = o3d.utility.Vector3dVector(pcs[i])
+            vis.update_geometry(lineset)
         vis.poll_events()
         vis.update_renderer()
 

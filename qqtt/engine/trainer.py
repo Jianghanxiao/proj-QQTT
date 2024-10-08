@@ -213,7 +213,7 @@ class InvPhyTrainer:
                             fps=cfg.FPS,
                         ),
                     },
-                    step=i
+                    step=i,
                 )
                 cur_model = {
                     "epoch": i,
@@ -251,14 +251,29 @@ class InvPhyTrainer:
         # Compute the mse loss between the ground truth and the predicted points
         return smooth_l1_loss(x, gt, beta=1.0, reduction="mean")
 
-    def test(self, model_path):
+    def test(self, model_path, normalization_factor=1e5):
         # Load the model
         logger.info(f"Load model from {model_path}")
         checkpoint = torch.load(model_path, map_location=cfg.device)
         self.simulator.load_state_dict(checkpoint["model_state_dict"])
         self.simulator.to(cfg.device)
 
-        self.visualize_sim(save_only=False)
+        springs = self.simulator.springs.cpu().numpy()
+        spring_params = (
+            torch.exp(self.simulator.spring_Y).detach().cpu().numpy() / normalization_factor
+        )
+        self.visualize_sim(
+            save_only=False,
+            springs=springs,
+            spring_params=spring_params,
+        )
+        video_path = f"{cfg.base_dir}/test_visual.mp4"
+        self.visualize_sim(
+            save_only=True,
+            video_path=video_path,
+            springs=springs,
+            spring_params=spring_params,
+        )
 
     def resume_train(self, model_path):
         # Load the model
@@ -271,7 +286,9 @@ class InvPhyTrainer:
 
         self.train(epoch)
 
-    def visualize_sim(self, save_only=True, video_path=None):
+    def visualize_sim(
+        self, save_only=True, video_path=None, springs=None, spring_params=None
+    ):
         # Visualize the whole simulation using current set of parameters in the physical simulator
         with torch.no_grad():
             # Need to reset the simulator to the initial state
@@ -299,6 +316,8 @@ class InvPhyTrainer:
                 visualize_pc(
                     vertices,
                     visualize=True,
+                    springs=springs,
+                    spring_params=spring_params,
                 )
             else:
                 assert video_path is not None, "Please provide the video path to save"
@@ -307,6 +326,8 @@ class InvPhyTrainer:
                     visualize=False,
                     save_video=True,
                     save_path=video_path,
+                    springs=springs,
+                    spring_params=spring_params,
                 )
 
     def visualize_gt(self):
