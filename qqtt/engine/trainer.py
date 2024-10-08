@@ -303,6 +303,24 @@ class InvPhyTrainer:
                     else None
                 ),
             )
+            
+            # if True:
+            #     left_index = []
+            #     pcds = self.init_vertices.cpu().numpy()
+            #     for spring in springs:
+            #         p1 = pcds[spring[0]]
+            #         p2 = pcds[spring[1]]
+            #         if p1[1] < 0.49:
+            #             left_index.append(True)
+            #         else:
+            #             left_index.append(False)
+            #     left_index = np.array(left_index)
+            #     springY_left = spring_params[left_index]
+            #     springY_right = spring_params[~left_index]
+
+                    
+            #     import pdb
+            #     pdb.set_trace()
 
             vertices = [self.init_vertices.cpu()]
 
