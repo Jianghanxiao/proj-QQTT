@@ -24,6 +24,9 @@ class SimpleConfig:
         # Parameters on whether update the collision parameters
         self.collision_learn = True
 
+        # Parameters on whether the gt point cloud is ordered across time
+        self.match = True
+
     def to_dict(self):
         # Convert the class to dictionary
         return {

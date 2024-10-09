@@ -7,6 +7,7 @@ import torch
 from fvcore.nn import smooth_l1_loss
 import wandb
 import os
+from pytorch3d.loss import chamfer_distance
 
 
 class InvPhyTrainer:
@@ -17,6 +18,8 @@ class InvPhyTrainer:
         cfg.base_dir = base_dir
         cfg.device = device
         cfg.run_name = base_dir.split("/")[-1]
+        # If match is True, use mse loss, otherwise use chamfer loss
+        self.match = cfg.match
         # Load the data
         self.dataset = SimpleData(visualize=False)
         self.init_masks = None
@@ -177,7 +180,7 @@ class InvPhyTrainer:
             total_loss = 0.0
             for j in range(1, self.dataset.frame_len):
                 x, _, _, _ = self.simulator.step()
-                loss = self.compute_points_loss(self.dataset.data[j], x)
+                loss = self.compute_points_loss(self.dataset.data[j], x, match=self.match)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -247,9 +250,13 @@ class InvPhyTrainer:
 
         wandb.finish()
 
-    def compute_points_loss(self, gt, x):
-        # Compute the mse loss between the ground truth and the predicted points
-        return smooth_l1_loss(x, gt, beta=1.0, reduction="mean")
+    def compute_points_loss(self, gt, x, match=True):
+        if match:
+            # Compute the mse loss between the ground truth and the predicted points
+            return smooth_l1_loss(x, gt, beta=1.0, reduction="mean")
+        else:
+            # Computer the chamfer loss between the ground truth and the predicted points
+            return chamfer_distance(x.unsqueeze(0), gt.unsqueeze(0))[0]
 
     def test(self, model_path, normalization_factor=1e5):
         # Load the model

@@ -18,4 +18,7 @@ pip install wandb
 pip install moviepy imageio
 conda install -c conda-forge opencv 
 pip install cma
+# For pytorch3D
+conda install -c iopath iopath
+conda install pytorch3d -c pytorch3d
 ```
