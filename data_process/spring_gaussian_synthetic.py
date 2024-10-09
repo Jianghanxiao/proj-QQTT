@@ -44,26 +44,9 @@ def demo_visualize(data_path, n_frames):
     vis.destroy_window()
 
 
-def demo_process_data(data_path, n_frames):
-    # Change from y up to z up
-    transformation = np.array([[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1]])
-
-    points = []
-    for i in range(n_frames):
-        file_name = f"{data_path}/{i:03d}.ply"
-        pcd = o3d.io.read_point_cloud(file_name)
-        points.append(np.asarray(pcd.points))
-    
-    
-
-    import pdb
-    pdb.set_trace()
-
-
 if __name__ == "__main__":
     object = "duck"
     data_path = f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/spring_gaussian/mpm_synthetic/simulation/{object}"
     n_frames = 30
 
-    # demo_visualize(data_path, n_frames)
-    demo_process_data(data_path, n_frames)
+    demo_visualize(data_path, n_frames)

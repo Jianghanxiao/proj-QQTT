@@ -180,7 +180,9 @@ class InvPhyTrainer:
             total_loss = 0.0
             for j in range(1, self.dataset.frame_len):
                 x, _, _, _ = self.simulator.step()
-                loss = self.compute_points_loss(self.dataset.data[j], x, match=self.match)
+                loss = self.compute_points_loss(
+                    self.dataset.data[j], x, match=self.match
+                )
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -255,8 +257,17 @@ class InvPhyTrainer:
             # Compute the mse loss between the ground truth and the predicted points
             return smooth_l1_loss(x, gt, beta=1.0, reduction="mean")
         else:
-            # Computer the chamfer loss between the ground truth and the predicted points
-            return chamfer_distance(x.unsqueeze(0), gt.unsqueeze(0))[0]
+            if self.init_masks is None:
+                # Computer the chamfer loss between the ground truth and the predicted points
+                return chamfer_distance(x.unsqueeze(0), gt.unsqueeze(0))[0]
+            else:
+                # TODO: need to pay attention to that in the future, the gt mask can be different from the initial mask
+                loss = torch.tensor(0.0, device=cfg.device)
+                for obj_mask in self.simulator.object_masks:
+                    loss += chamfer_distance(
+                        x[obj_mask].unsqueeze(0), gt[obj_mask].unsqueeze(0)
+                    )[0]
+                return loss
 
     def test(self, model_path, normalization_factor=1e5):
         # Load the model
@@ -267,7 +278,8 @@ class InvPhyTrainer:
 
         springs = self.simulator.springs.cpu().numpy()
         spring_params = (
-            torch.exp(self.simulator.spring_Y).detach().cpu().numpy() / normalization_factor
+            torch.exp(self.simulator.spring_Y).detach().cpu().numpy()
+            / normalization_factor
         )
         self.visualize_sim(
             save_only=False,
@@ -310,7 +322,7 @@ class InvPhyTrainer:
                     else None
                 ),
             )
-            
+
             # if True:
             #     left_index = []
             #     pcds = self.init_vertices.cpu().numpy()
@@ -325,7 +337,6 @@ class InvPhyTrainer:
             #     springY_left = spring_params[left_index]
             #     springY_right = spring_params[~left_index]
 
-                    
             #     import pdb
             #     pdb.set_trace()
 

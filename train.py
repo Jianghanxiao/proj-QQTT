@@ -52,7 +52,9 @@ def demo_rigid():
 
 
 def demo_billiard():
-    base_dir = f"experiments/billiard_initial_3e3_fix_collision_toi_no_gradient"
+    base_dir = f"experiments/billiard_initial_3e3_chamfer"
+    cfg.iterations = 1000
+    cfg.match = False
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainer(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard.npy",
@@ -91,8 +93,8 @@ def demo_cma_collision():
 
 
 if __name__ == "__main__":
-    demo_multiple_k()
+    # demo_multiple_k()
     # demo_rigid()
-    # demo_billiard()
+    demo_billiard()
     # demo_cma_collision()
     # demo_billiard_continue()
