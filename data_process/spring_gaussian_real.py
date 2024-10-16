@@ -1,9 +1,7 @@
-import open3d as o3d
 import numpy as np
 import json
 import cv2
 import os
-from read_cameras import read_cameras_binary
 
 # Resize Dimension: based on the requirement of DepthCrafter
 resized_height = 576
@@ -88,13 +86,15 @@ def save_resize_images(object, data_path, save_path, config, cameras, FPS):
             (resized_width, resized_height),
         )
         img_names = config[camera]
+        index = 0
         for img_name in img_names:
             img = cv2.imread(f"{data_path}/dynamic/videos_images/{camera}/{img_name}")
             img = cv2.resize(img, (resized_width, resized_height))
-            cv2.imwrite(f"{save_path}/imgs/{camera}/{img_name}", img)
+            cv2.imwrite(f"{save_path}/imgs/{camera}/{index}.jpg", img)
             # Write the images into videos
             video_writer_whole.write(img)
             video_writer_each.write(img)
+            index += 1
 
         video_writer_each.release()
     video_writer_whole.release()
