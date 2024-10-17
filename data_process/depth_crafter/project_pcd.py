@@ -169,8 +169,8 @@ if __name__ == "__main__":
     depths = {}
     index = 0
     for camera in cameras:
-        depth = np.load(f"{data_path}/{object}/depths/{camera}.npz")["depth"]
-        # depth = np.load(f"{data_path}/{object}/depths/whole.npz")["depth"]
+        depth = np.load(f"{data_path}/{object}/depths_depthcrafter/{camera}.npz")["depth"]
+        # depth = np.load(f"{data_path}/{object}/depths_depthcrafter/whole.npz")["depth"]
         # depths[camera] = depth[index * 20 : index * 20 + 20]
         depths[camera] = depth
         index += 1

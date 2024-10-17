@@ -16,5 +16,5 @@ if __name__ == "__main__":
     exist_dir(f"{videos_path}/../depths")
     for video in videos:
         os.system(
-            f"python ../DepthCrafter/run.py --video-path {video} --target-fps -1 --save-folder {videos_path}/../depths"
+            f"python ../DepthCrafter/run.py --video-path {video} --target-fps -1 --save-folder {videos_path}/../depths_depthcrafter"
         )

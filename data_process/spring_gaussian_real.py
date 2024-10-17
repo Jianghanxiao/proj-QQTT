@@ -4,8 +4,11 @@ import cv2
 import os
 
 # Resize Dimension: based on the requirement of DepthCrafter
-resized_height = 576
-resized_width = 1024
+# resized_height = 576
+# resized_width = 1024
+
+resized_height = 288
+resized_width = 512
 
 
 def exist_dir(dir):
@@ -66,38 +69,66 @@ def save_camera_info(
     return intrinsic, distortion, c2ws
 
 
-def save_resize_images(object, data_path, save_path, config, cameras, FPS):
+def save_resize_images(
+    object, data_path, save_path, config, cameras, FPS, save_video=False
+):
     global resized_width, resized_height
 
     exist_dir(f"{save_path}/imgs")
-    exist_dir(f"{save_path}/videos")
-    # Also save the images into videos
-    fourcc = cv2.VideoWriter_fourcc(*"avc1")  # Codec for .mp4 file format
-    video_writer_whole = cv2.VideoWriter(
-        f"{save_path}/videos/whole.mp4", fourcc, FPS, (resized_width, resized_height)
-    )
-
-    for camera in cameras:
-        exist_dir(f"{save_path}/imgs/{camera}")
-        video_writer_each = cv2.VideoWriter(
-            f"{save_path}/videos/{camera}.mp4",
+    exist_dir(f"{save_path}/masks")
+    # exist_dir(f"{save_path}/masked_imgs")
+    if save_video:
+        exist_dir(f"{save_path}/videos")
+        # Also save the images into videos
+        fourcc = cv2.VideoWriter_fourcc(*"avc1")  # Codec for .mp4 file format
+        video_writer_whole = cv2.VideoWriter(
+            f"{save_path}/videos/whole.mp4",
             fourcc,
             FPS,
             (resized_width, resized_height),
         )
+
+    for camera in cameras:
+        exist_dir(f"{save_path}/imgs/{camera}")
+        exist_dir(f"{save_path}/masks/{camera}")
+        # exist_dir(f"{save_path}/masked_imgs/{camera}")
+        if save_video:
+            video_writer_each = cv2.VideoWriter(
+                f"{save_path}/videos/{camera}.mp4",
+                fourcc,
+                FPS,
+                (resized_width, resized_height),
+            )
         img_names = config[camera]
         index = 0
         for img_name in img_names:
             img = cv2.imread(f"{data_path}/dynamic/videos_images/{camera}/{img_name}")
             img = cv2.resize(img, (resized_width, resized_height))
             cv2.imwrite(f"{save_path}/imgs/{camera}/{index}.jpg", img)
-            # Write the images into videos
-            video_writer_whole.write(img)
-            video_writer_each.write(img)
-            index += 1
+            mask = cv2.imread(
+                f"{data_path}/dynamic/videos_masks/{camera}/{img_name.split('.')[0]}.png"
+            )
+            mask = cv2.resize(
+                mask, (resized_width, resized_height), interpolation=cv2.INTER_NEAREST
+            )
+            cv2.imwrite(f"{save_path}/masks/{camera}/{index}.png", mask)
+            # # Binarize the mask
+            # bin_mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+            # bin_mask = cv2.threshold(bin_mask, 127, 255, cv2.THRESH_BINARY)[1]
+            # bin_mask[bin_mask > 0] = 1
+            # masked_img = img.copy()
+            # masked_img[~bin_mask.astype(bool)] = [0, 0, 0]
+            # cv2.imwrite(f"{save_path}/masked_imgs/{camera}/{index}.jpg", masked_img)
 
-        video_writer_each.release()
-    video_writer_whole.release()
+            if save_video:
+                # Write the images into videos
+                video_writer_whole.write(img)
+                video_writer_each.write(img)
+            index += 1
+        if save_video:
+            video_writer_each.release()
+    if save_video:
+        video_writer_whole.release()
 
 
 # Read the images
