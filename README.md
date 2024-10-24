@@ -22,3 +22,9 @@ pip install cma
 conda install -c iopath iopath
 conda install pytorch3d -c pytorch3d
 ```
+
+The env for cameras:
+```
+pip install pyrealsense
+pip install atomics
+```
