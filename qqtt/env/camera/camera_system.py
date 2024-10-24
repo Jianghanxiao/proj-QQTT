@@ -101,7 +101,7 @@ class CameraSystem:
 
         metadata = {}
         intrinsics = self.realsense.get_intrinsics()
-        metadata["intrinsics"] = intrinsics
+        metadata["intrinsics"] = intrinsics.tolist()
         metadata["serial_numbers"] = self.serial_numbers
         metadata["fps"] = self.fps
         metadata["WH"] = self.WH
