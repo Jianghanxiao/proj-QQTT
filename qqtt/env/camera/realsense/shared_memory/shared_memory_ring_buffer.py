@@ -21,7 +21,7 @@ class SharedMemoryRingBuffer:
             get_max_k: int,
             get_time_budget: float,
             put_desired_frequency: float,
-            safety_margin: float=1.5
+            safety_margin: float=10
         ):
         """
         shm_manager: Manages the life cycle of share memories 

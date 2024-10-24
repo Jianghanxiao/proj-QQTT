@@ -349,10 +349,9 @@ class SingleRealsense(mp.Process):
                 if self.enable_depth:
                     depth_frame = frameset.get_depth_frame()
                     if self.process_depth:
-                        data['depth'] = self.depth_process(depth_frame)
-                    data['depth'] = np.asarray(depth_frame.get_data())
-                    # data['depth'] = np.asarray(
-                    #     frameset.get_depth_frame().get_data())
+                        data['depth'] = self.depth_process(depth_frame).get_data()
+                    else:
+                        data['depth'] = np.asarray(depth_frame.get_data())
                 if self.enable_infrared:
                     data['infrared'] = np.asarray(
                         frameset.get_infrared_frame().get_data())
