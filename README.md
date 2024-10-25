@@ -29,3 +29,15 @@ pip install pyrealsense
 pip install atomics
 pip install pynput
 ```
+
+For record new data
+```
+# Do camera calibrations to get the extrinsic parameters
+python cameras_calibrate.py 
+# Record thr raw data
+python record_data.py
+# Do the video alignment
+python record_data_align.py
+# Process to get the PCD data for each frame
+python data_process_pcd.py
+```
