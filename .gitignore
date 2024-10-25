@@ -5,6 +5,7 @@ past_exps/
 data/
 .DS_Store
 outcmaes/
+data_collect*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

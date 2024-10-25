@@ -1,10 +1,9 @@
-from realsense import MultiRealsense, SingleRealsense
+from .realsense import MultiRealsense, SingleRealsense
 from multiprocessing.managers import SharedMemoryManager
 import numpy as np
 import time
 from pynput import keyboard
 import cv2
-from datetime import datetime
 import json
 import os
 
@@ -147,10 +146,4 @@ class CameraSystem:
         with open(f"{output_path}/metadata.json", "w") as f:
             json.dump(metadata, f)
 
-
-if __name__ == "__main__":
-    camera_system = CameraSystem()
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    camera_system.record(
-        output_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data_collect/{current_time}"
-    )
+        self.realsense.stop()

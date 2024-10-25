@@ -27,4 +27,5 @@ The env for cameras:
 ```
 pip install pyrealsense
 pip install atomics
+pip install pynput
 ```
