@@ -6,6 +6,7 @@ from pynput import keyboard
 import cv2
 import json
 import os
+import pickle
 
 np.set_printoptions(threshold=np.inf)
 np.set_printoptions(suppress=True)
@@ -17,7 +18,9 @@ def exist_dir(dir):
 
 
 class CameraSystem:
-    def __init__(self, WH=[640, 480], fps=30, num_cam=4):
+    def __init__(
+        self, WH=[640, 480], fps=30, num_cam=4, exposure=40, gain=60, white_balance=3800
+    ):
         self.WH = WH
         self.fps = fps
 
@@ -39,8 +42,8 @@ class CameraSystem:
             verbose=False,
         )
         # Some camera settings
-        self.realsense.set_exposure(exposure=100, gain=60)
-        self.realsense.set_white_balance(3800)
+        self.realsense.set_exposure(exposure=exposure, gain=gain)
+        self.realsense.set_white_balance(white_balance)
 
         self.realsense.start()
         time.sleep(3)
@@ -54,6 +57,7 @@ class CameraSystem:
         # Used to get the latest observations from all cameras
         data = self._get_sync_frame()
         # TODO: Process the data when needed
+        return data
 
     def _get_sync_frame(self, k=4):
         assert self.realsense.is_ready
@@ -74,6 +78,7 @@ class CameraSystem:
                     min_diff = diff
                     best_idx = i
             # remap key, step_idx is different, timestamp can be the same when some frames are lost
+            data[camera_idx] = {}
             data[camera_idx]["color"] = value["color"][best_idx]
             data[camera_idx]["depth"] = value["depth"][best_idx]
             data[camera_idx]["timestamp"] = value["timestamp"][best_idx]
@@ -145,5 +150,93 @@ class CameraSystem:
         self.listener.stop()
         with open(f"{output_path}/metadata.json", "w") as f:
             json.dump(metadata, f)
+
+        self.realsense.stop()
+
+    def calibrate(self, visualize=False):
+        # Initialize the calibration board information
+        dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+        board = cv2.aruco.CharucoBoard(
+            (4, 5),
+            squareLength=0.05,
+            markerLength=0.037,
+            dictionary=dictionary,
+        )
+        # Get the intrinsic information from the realsense camera
+        intrinsics = self.realsense.get_intrinsics()
+        obs = self.get_observation()
+        colors = [obs[i]["color"] for i in range(self.num_cam)]
+
+        c2ws = []
+        for i in range(self.num_cam):
+            intrinsic = intrinsics[i]
+            calibration_img = colors[i]
+            # cv2.imshow("cablibration", calibration_img)
+            # cv2.waitKey(0)
+
+            corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(
+                image=calibration_img,
+                dictionary=dictionary,
+                parameters=None,
+            )
+            retval, charuco_corners, charuco_ids = cv2.aruco.interpolateCornersCharuco(
+                markerCorners=corners,
+                markerIds=ids,
+                image=calibration_img,
+                board=board,
+                cameraMatrix=intrinsic,
+            )
+            # cv2.imshow("cablibration", calibration_img)
+            # import pdb
+
+            # pdb.set_trace()
+            print("number of corners: ", len(charuco_corners))
+            if visualize:
+                cv2.aruco.drawDetectedCornersCharuco(
+                    image=calibration_img,
+                    charucoCorners=charuco_corners,
+                    charucoIds=charuco_ids,
+                )
+                cv2.imshow("cablibration", calibration_img)
+                cv2.waitKey(1)
+
+            rvec = None
+            tvec = None
+            retval, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(
+                charuco_corners,
+                charuco_ids,
+                board,
+                intrinsic,
+                None,
+                rvec=rvec,
+                tvec=tvec,
+            )
+
+            # Reproject the points to calculate the error
+            reprojected_points, _ = cv2.projectPoints(
+                board.getChessboardCorners()[charuco_ids, :],
+                rvec,
+                tvec,
+                intrinsic,
+                None,
+            )
+            # Reshape for easier handling
+            reprojected_points = reprojected_points.reshape(-1, 2)
+            charuco_corners = charuco_corners.reshape(-1, 2)
+            # Calculate the error
+            error = np.sqrt(
+                np.sum((reprojected_points - charuco_corners) ** 2, axis=1)
+            ).mean()
+
+            print("Reprojection Error:", error)
+            R_board2cam = cv2.Rodrigues(rvec)[0]
+            t_board2cam = tvec[:, 0]
+            w2c = np.eye(4)
+            w2c[:3, :3] = R_board2cam
+            w2c[:3, 3] = t_board2cam
+            c2ws.append(np.linalg.inv(w2c))
+
+        with open("calibrate.pkl", "wb") as f:
+            pickle.dump(c2ws, f)
 
         self.realsense.stop()
