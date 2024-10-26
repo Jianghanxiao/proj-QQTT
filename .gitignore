@@ -7,6 +7,7 @@ data/
 outcmaes/
 data_collect*
 *.pkl
+past*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -6,15 +6,17 @@ num_cameras = 4
 output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
 calibrate_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/calibrate.pkl"
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data_collect"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect"
 case_name = "rope_double_hand"
 # Need to manually control this for each video to cut (based on camera 0 always)
 start_step = 475
 end_step = 841
 
+
 def exist_dir(dir):
     if not os.path.exists(dir):
         os.makedirs(dir)
+
 
 if __name__ == "__main__":
     new_metadata = {}
@@ -32,10 +34,10 @@ if __name__ == "__main__":
     final_frames = []
     # Get all frames of camera 0 between start_step and end_step
     # And match the timestamps of other cameras
-    for i in step_timestamps['0'].keys():
+    for i in step_timestamps["0"].keys():
         if int(i) >= start_step and int(i) <= end_step:
             frame_num += 1
-            timestamp = step_timestamps['0'][i]
+            timestamp = step_timestamps["0"][i]
             current_frame = [int(i)]
             for j in range(1, num_cameras):
                 # Search the adjacent step_idx and get the most close timestamp
@@ -45,15 +47,17 @@ if __name__ == "__main__":
                 best_idx = None
                 for k in range(-3, 4):
                     if str(step_idx + k) in step_timestamps[str(j)]:
-                        diff = abs(step_timestamps[str(j)][str(step_idx + k)] - timestamp)
+                        diff = abs(
+                            step_timestamps[str(j)][str(step_idx + k)] - timestamp
+                        )
                         if diff < min_diff:
                             min_diff = diff
                             best_idx = step_idx + k
                 current_frame.append(best_idx)
             final_frames.append(current_frame)
-    
+
     new_metadata["frame_num"] = frame_num
-    # Move the files into a final data format           
+    # Move the files into a final data format
     exist_dir(f"{output_path}")
     exist_dir(f"{output_path}/{case_name}")
     exist_dir(f"{output_path}/{case_name}/color")
@@ -68,7 +72,16 @@ if __name__ == "__main__":
         json.dump(new_metadata, f)
     for k, frame in enumerate(final_frames):
         for i in range(num_cameras):
-            os.system(f"cp {base_path}/{case_name}/color/{i}/{frame[i]}.png {output_path}/{case_name}/color/{i}/{k}.png")
-            os.system(f"cp {base_path}/{case_name}/depth/{i}/{frame[i]}.npy {output_path}/{case_name}/depth/{i}/{k}.npy")
+            os.system(
+                f"cp {base_path}/{case_name}/color/{i}/{frame[i]}.png {output_path}/{case_name}/color/{i}/{k}.png"
+            )
+            os.system(
+                f"cp {base_path}/{case_name}/depth/{i}/{frame[i]}.npy {output_path}/{case_name}/depth/{i}/{k}.npy"
+            )
 
-    
+    # for each camera, create a video for all frames with the fps 30
+    # Useing opencv to create the video
+    for i in range(num_cameras):
+        os.system(
+            f"ffmpeg -r 30 -start_number 0 -f image2 -i {output_path}/{case_name}/color/{i}/%d.png -vcodec libx264 -crf 0  -pix_fmt yuv420p {output_path}/{case_name}/color/{i}.mp4"
+        )
