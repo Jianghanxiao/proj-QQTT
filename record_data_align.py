@@ -6,11 +6,11 @@ num_cameras = 4
 output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
 calibrate_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/calibrate.pkl"
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect"
-case_name = "rope_double_hand"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data_collect"
+case_name = "test_rope"
 # Need to manually control this for each video to cut (based on camera 0 always)
-start_step = 475
-end_step = 841
+start_step = 967
+end_step = 1000
 
 
 def exist_dir(dir):

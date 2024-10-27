@@ -19,7 +19,7 @@ def exist_dir(dir):
 
 class CameraSystem:
     def __init__(
-        self, WH=[640, 480], fps=30, num_cam=4, exposure=40, gain=60, white_balance=3800
+        self, WH=[848, 480], fps=30, num_cam=3, exposure=50, gain=60, white_balance=3800
     ):
         self.WH = WH
         self.fps = fps
@@ -153,7 +153,7 @@ class CameraSystem:
 
         self.realsense.stop()
 
-    def calibrate(self, visualize=False):
+    def calibrate(self, visualize=True):
         # Initialize the calibration board information
         dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         board = cv2.aruco.CharucoBoard(
@@ -164,77 +164,85 @@ class CameraSystem:
         )
         # Get the intrinsic information from the realsense camera
         intrinsics = self.realsense.get_intrinsics()
-        obs = self.get_observation()
-        colors = [obs[i]["color"] for i in range(self.num_cam)]
 
-        c2ws = []
-        for i in range(self.num_cam):
-            intrinsic = intrinsics[i]
-            calibration_img = colors[i]
-            # cv2.imshow("cablibration", calibration_img)
-            # cv2.waitKey(0)
+        flag = True
+        while flag:
+            flag = False
+            obs = self.get_observation()
+            colors = [obs[i]["color"] for i in range(self.num_cam)]
 
-            corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(
-                image=calibration_img,
-                dictionary=dictionary,
-                parameters=None,
-            )
-            retval, charuco_corners, charuco_ids = cv2.aruco.interpolateCornersCharuco(
-                markerCorners=corners,
-                markerIds=ids,
-                image=calibration_img,
-                board=board,
-                cameraMatrix=intrinsic,
-            )
-            # cv2.imshow("cablibration", calibration_img)
-            # import pdb
+            c2ws = []
+            for i in range(self.num_cam):
+                intrinsic = intrinsics[i]
+                calibration_img = colors[i]
+                # cv2.imshow("cablibration", calibration_img)
+                # cv2.waitKey(0)
 
-            # pdb.set_trace()
-            print("number of corners: ", len(charuco_corners))
-            if visualize:
-                cv2.aruco.drawDetectedCornersCharuco(
+                corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(
                     image=calibration_img,
-                    charucoCorners=charuco_corners,
-                    charucoIds=charuco_ids,
+                    dictionary=dictionary,
+                    parameters=None,
                 )
-                cv2.imshow("cablibration", calibration_img)
-                cv2.waitKey(1)
+                retval, charuco_corners, charuco_ids = (
+                    cv2.aruco.interpolateCornersCharuco(
+                        markerCorners=corners,
+                        markerIds=ids,
+                        image=calibration_img,
+                        board=board,
+                        cameraMatrix=intrinsic,
+                    )
+                )
+                # cv2.imshow("cablibration", calibration_img)
 
-            rvec = None
-            tvec = None
-            retval, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(
-                charuco_corners,
-                charuco_ids,
-                board,
-                intrinsic,
-                None,
-                rvec=rvec,
-                tvec=tvec,
-            )
+                print("number of corners: ", len(charuco_corners))
+                if visualize:
+                    cv2.aruco.drawDetectedCornersCharuco(
+                        image=calibration_img,
+                        charucoCorners=charuco_corners,
+                        charucoIds=charuco_ids,
+                    )
+                    cv2.imshow("cablibration", calibration_img)
+                    cv2.waitKey(1)
 
-            # Reproject the points to calculate the error
-            reprojected_points, _ = cv2.projectPoints(
-                board.getChessboardCorners()[charuco_ids, :],
-                rvec,
-                tvec,
-                intrinsic,
-                None,
-            )
-            # Reshape for easier handling
-            reprojected_points = reprojected_points.reshape(-1, 2)
-            charuco_corners = charuco_corners.reshape(-1, 2)
-            # Calculate the error
-            error = np.sqrt(
-                np.sum((reprojected_points - charuco_corners) ** 2, axis=1)
-            ).mean()
+                rvec = None
+                tvec = None
+                retval, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(
+                    charuco_corners,
+                    charuco_ids,
+                    board,
+                    intrinsic,
+                    None,
+                    rvec=rvec,
+                    tvec=tvec,
+                )
 
-            print("Reprojection Error:", error)
-            R_board2cam = cv2.Rodrigues(rvec)[0]
-            t_board2cam = tvec[:, 0]
-            w2c = np.eye(4)
-            w2c[:3, :3] = R_board2cam
-            w2c[:3, 3] = t_board2cam
-            c2ws.append(np.linalg.inv(w2c))
+                # Reproject the points to calculate the error
+                reprojected_points, _ = cv2.projectPoints(
+                    board.getChessboardCorners()[charuco_ids, :],
+                    rvec,
+                    tvec,
+                    intrinsic,
+                    None,
+                )
+                # Reshape for easier handling
+                reprojected_points = reprojected_points.reshape(-1, 2)
+                charuco_corners = charuco_corners.reshape(-1, 2)
+                # Calculate the error
+                error = np.sqrt(
+                    np.sum((reprojected_points - charuco_corners) ** 2, axis=1)
+                ).mean()
+
+                print("Reprojection Error:", error)
+                if error > 0.2:
+                    flag = True
+                    print("Please try again.")
+                    break
+                R_board2cam = cv2.Rodrigues(rvec)[0]
+                t_board2cam = tvec[:, 0]
+                w2c = np.eye(4)
+                w2c[:3, :3] = R_board2cam
+                w2c[:3, 3] = t_board2cam
+                c2ws.append(np.linalg.inv(w2c))
 
         with open("calibrate.pkl", "wb") as f:
             pickle.dump(c2ws, f)

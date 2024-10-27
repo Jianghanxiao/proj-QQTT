@@ -41,3 +41,11 @@ python record_data_align.py
 # Process to get the PCD data for each frame
 python data_process_pcd.py
 ```
+
+# Record data
+```
+python cameras_calibrate.py
+python record_data.py
+python record_data_align.py
+# Get the masks from GroundedSAM2
+```

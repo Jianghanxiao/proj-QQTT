@@ -175,7 +175,6 @@ def getPcdFromRgbd(
     cy=None,
     intrinsic=None,
     depth_scale=1,
-    alpha_filter=False,
     mask=None,
     is_opencv=True,
 ):
@@ -193,10 +192,6 @@ def getPcdFromRgbd(
         for x in range(width):
             if mask is not None and not mask[y][x]:
                 continue
-            if alpha_filter:
-                # Filter the background based on the alpha channel
-                if rgb[y][x][3] != 1:
-                    continue
             colors.append(rgb[y][x][:3])
             if fx != None:
                 points.append(
@@ -209,10 +204,10 @@ def getPcdFromRgbd(
             else:
                 depth[y][x] *= -1
                 old_point = np.array(
-                    [(width - x) * depth[y][x], y * depth[y][x], depth[y][x], 1]
+                    [(width - x) * depth[y][x], y * depth[y][x], depth[y][x]]
                 )
                 point = np.dot(np.linalg.inv(intrinsic), old_point)
-                points.append(point[:3])
+                points.append(point)
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(np.array(points))
