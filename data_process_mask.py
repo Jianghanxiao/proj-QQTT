@@ -62,6 +62,15 @@ def process_pcd_mask(frame_idx, pcd_path, mask_path, mask_info, num_cam):
         pcd.colors = o3d.utility.Vector3dVector(controller_colors)
         controller_pcd += pcd
 
+    # Apply the outlier removal
+    cl, ind = object_pcd.remove_radius_outlier(nb_points=40, radius=0.01)
+    object_pcd = object_pcd.select_by_index(ind)
+
+    cl, ind = controller_pcd.remove_radius_outlier(nb_points=40, radius=0.01)
+    controller_pcd = controller_pcd.select_by_index(ind)
+
+    controller_pcd.paint_uniform_color([1, 0, 0])
+
     # o3d.visualization.draw_geometries([object_pcd, controller_pcd])
 
     return object_pcd, controller_pcd

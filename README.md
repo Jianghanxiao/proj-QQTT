@@ -51,5 +51,7 @@ python data_process_pcd.py
 
 # Get the masks from GroundedSAM2 (Go to GroundedSAM2 repo)
 python test_real.py 
+# Get the track data from CoTracker
+python get_track.py
 # Further process the data with other foundation models (Go back to our current repo)
 ```
