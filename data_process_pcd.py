@@ -5,38 +5,177 @@ import pickle
 import cv2
 from tqdm import tqdm
 import os
-from qqtt.utils import getCamera, getPcdFromRgbd
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
-# case_name = "rope_double_hand"
-case_name = "test_rope"
-OBJECT_NAME = "rope"
-CONTROLLER_NAME = "hand"
+case_name = "rope_double_hand"
 
 
-def get_pcd_from_data(path, frame_idx, num_cam, intrinsics, c2ws, mask_info):
-    total_pcd = o3d.geometry.PointCloud()
+# Use code from https://github.com/Jianghanxiao/Helper3D/blob/master/open3d_RGBD/src/camera/cameraHelper.py
+def getCamera(
+    transformation,
+    fx,
+    fy,
+    cx,
+    cy,
+    scale=1,
+    coordinate=True,
+    shoot=False,
+    length=4,
+    color=np.array([0, 1, 0]),
+    z_flip=False,
+):
+    # Return the camera and its corresponding frustum framework
+    if coordinate:
+        camera = o3d.geometry.TriangleMesh.create_coordinate_frame(size=scale)
+        camera.transform(transformation)
+    else:
+        camera = o3d.geometry.TriangleMesh()
+    # Add origin and four corner points in image plane
+    points = []
+    camera_origin = np.array([0, 0, 0, 1])
+    points.append(np.dot(transformation, camera_origin)[0:3])
+    # Calculate the four points for of the image plane
+    magnitude = (cy**2 + cx**2 + fx**2) ** 0.5
+    if z_flip:
+        plane_points = [[-cx, -cy, fx], [-cx, cy, fx], [cx, -cy, fx], [cx, cy, fx]]
+    else:
+        plane_points = [[-cx, -cy, -fx], [-cx, cy, -fx], [cx, -cy, -fx], [cx, cy, -fx]]
+    for point in plane_points:
+        point = list(np.array(point) / magnitude * scale)
+        temp_point = np.array(point + [1])
+        points.append(np.dot(transformation, temp_point)[0:3])
+    # Draw the camera framework
+    lines = [[0, 1], [0, 2], [0, 3], [0, 4], [1, 2], [2, 4], [1, 3], [3, 4]]
+    line_set = o3d.geometry.LineSet(
+        points=o3d.utility.Vector3dVector(points),
+        lines=o3d.utility.Vector2iVector(lines),
+    )
+
+    meshes = [camera, line_set]
+
+    if shoot:
+        shoot_points = []
+        shoot_points.append(np.dot(transformation, camera_origin)[0:3])
+        shoot_points.append(np.dot(transformation, np.array([0, 0, -length, 1]))[0:3])
+        shoot_lines = [[0, 1]]
+        shoot_line_set = o3d.geometry.LineSet(
+            points=o3d.utility.Vector3dVector(shoot_points),
+            lines=o3d.utility.Vector2iVector(shoot_lines),
+        )
+        shoot_line_set.paint_uniform_color(color)
+        meshes.append(shoot_line_set)
+
+    return meshes
+
+
+def fill_depth_nearest(depth_map, rgb, mask):
+    # Get the coordinates of the masked (invalid) and unmasked (valid) pixels
+    masked_coords = np.argwhere(mask)
+    unmasked_coords = np.argwhere(~mask)
+
+    # Extract depth values of unmasked pixels
+    unmasked_depths = depth_map[~mask]
+
+    # Build a KDTree with the unmasked coordinates
+    tree = cKDTree(unmasked_coords)
+
+    # Query the nearest unmasked neighbors for each masked location
+    distances, indices = tree.query(masked_coords, k=9)
+
+    rgb_curr = rgb[mask][:, None, :]
+    rgb_tgt = rgb[~mask][indices]
+
+    rgb_diff = np.linalg.norm(rgb_curr - rgb_tgt, axis=-1)
+    idx = np.argmin(rgb_diff, axis=1)
+
+    indices = indices[np.arange(idx.shape[0]), idx]
+
+    # Replace the depth values in the mask locations with the nearest neighbors
+    depth_map[mask] = unmasked_depths[indices]
+
+    return depth_map
+
+
+def clean_depth_outliers(depth, rgb, thrs=3.0):
+
+    grad_x = cv2.Sobel(depth, cv2.CV_64F, 1, 0, ksize=3)  # Gradient along x-axis
+    grad_y = cv2.Sobel(depth, cv2.CV_64F, 0, 1, ksize=3)  # Gradient along y-axis
+
+    # Optionally, compute the gradient magnitude (Euclidean distance)
+    grad_magnitude = cv2.magnitude(grad_x, grad_y)
+
+    mask = grad_magnitude > thrs
+
+    clean_depth = fill_depth_nearest(depth.copy(), rgb, mask)
+
+    return clean_depth
+
+
+# Use code from https://github.com/Jianghanxiao/Helper3D/blob/master/open3d_RGBD/src/model/pcdHelper.py
+def getPcdFromDepth(
+    depth,
+    intrinsic,
+):
+    # Depth in meters
+    height, width = np.shape(depth)
+
+    # Reshape the depth array to invert the depth values
+    depth = -depth
+
+    # Create a grid of (x, y) coordinates
+    x_coords = np.arange(width)
+    y_coords = np.arange(height)
+
+    # Create a meshgrid for x and y coordinates
+    X, Y = np.meshgrid(x_coords, y_coords)
+
+    # Calculate points using vectorized operations
+    old_points = np.stack([(width - X) * depth, Y * depth, depth], axis=-1)
+
+    # Flatten the old_points array and calculate the new points using matrix multiplication
+    points = np.dot(np.linalg.inv(intrinsic), old_points.reshape(-1, 3).T).T.reshape(
+        old_points.shape
+    )
+
+    points[:, :, 1] *= -1
+    points[:, :, 2] *= -1
+
+    return points
+
+
+def get_pcd_from_data(path, frame_idx, num_cam, intrinsics, c2ws):
+    total_points = []
+    total_colors = []
+    total_masks = []
     for i in range(num_cam):
         color = cv2.imread(f"{path}/color/{i}/{frame_idx}.png")
         color = cv2.cvtColor(color, cv2.COLOR_BGR2RGB)
         color = color.astype(np.float32) / 255.0
         depth = np.load(f"{path}/depth/{i}/{frame_idx}.npy") / 1000.0
 
-        final_mask = np.logical_and(depth > 0.05, depth < 2.0)
-        pcd = getPcdFromRgbd(
-            color,
+        points = getPcdFromDepth(
             depth,
             intrinsic=intrinsics[i],
-            mask=final_mask,
-            is_opencv=True,
         )
-        # if i== 2 :
-        # pcd.paint_uniform_color(list(np.random.rand(3)))
-        pcd.transform(c2ws[i])
-        total_pcd += pcd
-    coordinates = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-    o3d.visualization.draw_geometries([total_pcd, coordinates])
-    return total_pcd
+        masks = np.logical_and(points[:, :, 2] > 0.2, points[:, :, 2] < 1.5)
+        points_flat = points.reshape(-1, 3)
+        # Transform points to world coordinates using homogeneous transformation
+        homogeneous_points = np.hstack(
+            (points_flat, np.ones((points_flat.shape[0], 1)))
+        )
+        points_world = np.dot(c2ws[i], homogeneous_points.T).T[:, :3]
+        points_final = points_world.reshape(points.shape)
+        total_points.append(points_final)
+        total_colors.append(color)
+        total_masks.append(masks)
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(np.concatenate(total_points).reshape(-1, 3))
+    # pcd.colors = o3d.utility.Vector3dVector(np.concatenate(total_colors).reshape(-1, 3))
+    # o3d.visualization.draw_geometries([pcd])
+    total_points = np.asarray(total_points)
+    total_colors = np.asarray(total_colors)
+    total_masks = np.asarray(total_masks)
+    return total_points, total_colors, total_masks
 
 
 def exist_dir(dir):
@@ -51,45 +190,69 @@ if __name__ == "__main__":
     WH = data["WH"]
     frame_num = data["frame_num"]
     print(data["serial_numbers"])
-    # import pdb
-    # pdb.set_trace()
+
     num_cam = len(intrinsics)
     c2ws = pickle.load(open(f"{base_path}/{case_name}/calibrate.pkl", "rb"))
-    # Load the mask metadata
-    mask_info = {}
-    # for i in range(num_cam):
-    #     with open(f"{base_path}/{case_name}/mask/mask_info_{i}.json", "r") as f:
-    #         data = json.load(f)
-    #     mask_info[i] = {}
-    #     for key, value in data.items():
-    #         if value == OBJECT_NAME:
-    #             mask_info[i]["object"] = int(key)
-    #         if value == CONTROLLER_NAME:
-    #             if "controller" in mask_info[i]:
-    #                 mask_info[i]["controller"].append(int(key))
-    #             else:
-    #                 mask_info[i]["controller"] = [int(key)]
 
     exist_dir(f"{base_path}/{case_name}/pcd")
-    exist_dir(f"{base_path}/{case_name}/pcd/object")
-    exist_dir(f"{base_path}/{case_name}/pcd/controller")
 
+    cameras = []
+    # Visualize the cameras
+    for i in range(num_cam):
+        camera = getCamera(
+            c2ws[i],
+            intrinsics[i, 0, 0],
+            intrinsics[i, 1, 1],
+            intrinsics[i, 0, 2],
+            intrinsics[i, 1, 2],
+            z_flip=True,
+            scale=0.2,
+        )
+        cameras += camera
+
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+    for camera in cameras:
+        vis.add_geometry(camera)
+
+    coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5)
+    vis.add_geometry(coordinate)
+
+    pcd = None
     for i in tqdm(range(frame_num)):
-        object_pcd, controller_pcd = get_pcd_from_data(
-            f"{base_path}/{case_name}", i, num_cam, intrinsics, c2ws, mask_info
-        )
-        object_points = np.asarray(object_pcd.points)
-        object_colors = np.asarray(object_pcd.colors)
-        np.savez(
-            f"{base_path}/{case_name}/pcd/object/{i}.npz",
-            points=object_points,
-            colors=object_colors,
+        points, colors, masks = get_pcd_from_data(
+            f"{base_path}/{case_name}", i, num_cam, intrinsics, c2ws
         )
 
-        controller_points = np.asarray(controller_pcd.points)
-        controller_colors = np.asarray(controller_pcd.colors)
+        if i == 0:
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(
+                points.reshape(-1, 3)[masks.reshape(-1)]
+            )
+            pcd.colors = o3d.utility.Vector3dVector(
+                colors.reshape(-1, 3)[masks.reshape(-1)]
+            )
+            vis.add_geometry(pcd)
+            # Adjust the viewpoint
+            view_control = vis.get_view_control()
+            view_control.set_front([1, 0, -2])
+            view_control.set_up([0, 0, -1])
+            view_control.set_zoom(1)
+        else:
+            pcd.points = o3d.utility.Vector3dVector(
+                points.reshape(-1, 3)[masks.reshape(-1)]
+            )
+            pcd.colors = o3d.utility.Vector3dVector(
+                colors.reshape(-1, 3)[masks.reshape(-1)]
+            )
+            vis.update_geometry(pcd)
+
+            vis.poll_events()
+            vis.update_renderer()
+
         np.savez(
-            f"{base_path}/{case_name}/pcd/controller/{i}.npz",
-            points=controller_points,
-            colors=controller_colors,
+            f"{base_path}/{case_name}/pcd/{i}.npz",
+            points=points,
+            colors=colors,
+            masks=masks,
         )

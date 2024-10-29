@@ -47,5 +47,9 @@ python data_process_pcd.py
 python cameras_calibrate.py
 python record_data.py
 python record_data_align.py
-# Get the masks from GroundedSAM2
+python data_process_pcd.py
+
+# Get the masks from GroundedSAM2 (Go to GroundedSAM2 repo)
+python test_real.py 
+# Further process the data with other foundation models (Go back to our current repo)
 ```

@@ -2,15 +2,15 @@
 import os
 import json
 
-num_cameras = 4
+num_cameras = 3
 output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
 calibrate_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/calibrate.pkl"
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data_collect"
-case_name = "test_rope"
+case_name = "test_static"
 # Need to manually control this for each video to cut (based on camera 0 always)
-start_step = 967
-end_step = 1000
+start_step = 150
+end_step = 155
 
 
 def exist_dir(dir):
