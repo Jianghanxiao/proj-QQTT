@@ -68,49 +68,6 @@ def getCamera(
     return meshes
 
 
-def fill_depth_nearest(depth_map, rgb, mask):
-    # Get the coordinates of the masked (invalid) and unmasked (valid) pixels
-    masked_coords = np.argwhere(mask)
-    unmasked_coords = np.argwhere(~mask)
-
-    # Extract depth values of unmasked pixels
-    unmasked_depths = depth_map[~mask]
-
-    # Build a KDTree with the unmasked coordinates
-    tree = cKDTree(unmasked_coords)
-
-    # Query the nearest unmasked neighbors for each masked location
-    distances, indices = tree.query(masked_coords, k=9)
-
-    rgb_curr = rgb[mask][:, None, :]
-    rgb_tgt = rgb[~mask][indices]
-
-    rgb_diff = np.linalg.norm(rgb_curr - rgb_tgt, axis=-1)
-    idx = np.argmin(rgb_diff, axis=1)
-
-    indices = indices[np.arange(idx.shape[0]), idx]
-
-    # Replace the depth values in the mask locations with the nearest neighbors
-    depth_map[mask] = unmasked_depths[indices]
-
-    return depth_map
-
-
-def clean_depth_outliers(depth, rgb, thrs=3.0):
-
-    grad_x = cv2.Sobel(depth, cv2.CV_64F, 1, 0, ksize=3)  # Gradient along x-axis
-    grad_y = cv2.Sobel(depth, cv2.CV_64F, 0, 1, ksize=3)  # Gradient along y-axis
-
-    # Optionally, compute the gradient magnitude (Euclidean distance)
-    grad_magnitude = cv2.magnitude(grad_x, grad_y)
-
-    mask = grad_magnitude > thrs
-
-    clean_depth = fill_depth_nearest(depth.copy(), rgb, mask)
-
-    return clean_depth
-
-
 # Use code from https://github.com/Jianghanxiao/Helper3D/blob/master/open3d_RGBD/src/model/pcdHelper.py
 def getPcdFromDepth(
     depth,
