@@ -1,16 +1,17 @@
 import numpy as np
 import open3d as o3d
-import json
 from tqdm import tqdm
 import os
 import glob
-import cv2
 import pickle
+import matplotlib.pyplot as plt
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
 case_name = "rope_double_hand"
 OBJECT_NAME = "twine"
 CONTROLLER_NAME = "hand"
+
+rainbow_colors = {}
 
 
 def exist_dir(dir):
@@ -19,12 +20,13 @@ def exist_dir(dir):
 
 
 # Deprecated: throwing away the whole trajectory doesn't make that much sense
-def strict_filter_track(track_path, mask_path, frame_num, num_cam):
+def filter_track(track_path, mask_path, frame_num, num_cam):
     with open(f"{mask_path}/processed_masks.pkl", "rb") as f:
         processed_masks = pickle.load(f)
-    
+
+    # Filter out the points not valid in the first frame
     track_data = {}
-    for i in tqdm(range(num_cam)):
+    for i in range(num_cam):
         current_track_data = np.load(f"{track_path}/{i}.npz")
         # Filter out the track data
         tracks = current_track_data["tracks"]
@@ -44,30 +46,28 @@ def strict_filter_track(track_path, mask_path, frame_num, num_cam):
         track_controller_idx = np.zeros((num_points), dtype=int)
         for j in range(num_points):
             if visibility[0, j] == 1:
-                track_controller_idx[j] = controller_mask[tracks[0, j, 0], tracks[0, j, 1]]
+                track_controller_idx[j] = controller_mask[
+                    tracks[0, j, 0], tracks[0, j, 1]
+                ]
 
         # Filter out bad tracking in other frames
         for frame_idx in range(1, frame_num):
             # Filter based on object_mask
             object_mask = processed_masks[frame_idx][i]["object"]
             for j in range(num_points):
-                # if visibility[frame_idx, j] == 0:
-                #     track_object_idx[j] = 0
                 if track_object_idx[j] == 1 and visibility[frame_idx, j] == 1:
                     if not object_mask[
                         tracks[frame_idx, j, 0], tracks[frame_idx, j, 1]
                     ]:
-                        track_object_idx[j] = 0
+                        visibility[frame_idx, j] = 0
             # Filter based on controller_mask
             controller_mask = processed_masks[frame_idx][i]["controller"]
             for j in range(num_points):
-                # if visibility[frame_idx, j] == 0:
-                #     track_controller_idx[j] = 0
                 if track_controller_idx[j] == 1 and visibility[frame_idx, j] == 1:
                     if not controller_mask[
                         tracks[frame_idx, j, 0], tracks[frame_idx, j, 1]
                     ]:
-                        track_controller_idx[j] = 0
+                        visibility[frame_idx, j] = 0
 
         final_valid_idx = np.logical_or(track_object_idx, track_controller_idx)
         track_data[i] = {}
@@ -87,6 +87,7 @@ def process_pcd_mask(
     num_cam,
     track_data,
 ):
+    global rainbow_colors
     # Load the pcd data
     data = np.load(f"{pcd_path}/{frame_idx}.npz")
     points = data["points"]
@@ -99,11 +100,23 @@ def process_pcd_mask(
     for i in range(num_cam):
         current_track_data = track_data[i]
         tracks = current_track_data["tracks"][frame_idx]
+        visibility = current_track_data["visibility"][frame_idx]
         track_object_idx = current_track_data["track_object_idx"]
-        valid_pixels = tracks[np.where(track_object_idx == 1)]
+        final_object_idx = np.logical_and(track_object_idx == 1, visibility == 1)
+        valid_pixels = tracks[np.where(final_object_idx)]
+
+        if i not in rainbow_colors:
+            all_points = points[i][tracks[:, 0], tracks[:, 1]]
+            if i == 0:
+                y_min, y_max = np.min(all_points[:, 1]), np.max(all_points[:, 1])
+            y_normalized = (all_points[:, 1] - y_min) / (y_max - y_min)
+            rainbow_colors[i] = plt.cm.rainbow(y_normalized)[:, :3]
 
         object_points = points[i][valid_pixels[:, 0], valid_pixels[:, 1]]
-        object_colors = colors[i][valid_pixels[:, 0], valid_pixels[:, 1]]
+        # object_colors = colors[i][valid_pixels[:, 0], valid_pixels[:, 1]]
+        object_colors = rainbow_colors[i][np.where(final_object_idx)]
+        assert object_points.shape[0] == object_colors.shape[0]
+
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(object_points)
         pcd.colors = o3d.utility.Vector3dVector(object_colors)
@@ -111,28 +124,24 @@ def process_pcd_mask(
 
         # Load the controller mask
         track_controller_idx = current_track_data["track_controller_idx"]
-        valid_pixels = tracks[np.where(track_controller_idx == 1)]
+        final_controller_idx = np.logical_and(
+            track_controller_idx == 1, visibility == 1
+        )
+        valid_pixels = tracks[np.where(final_controller_idx)]
 
         controller_points = points[i][valid_pixels[:, 0], valid_pixels[:, 1]]
-        controller_colors = colors[i][valid_pixels[:, 0], valid_pixels[:, 1]]
+        # controller_colors = colors[i][valid_pixels[:, 0], valid_pixels[:, 1]]
+        controller_colors = rainbow_colors[i][np.where(final_controller_idx)]
+        assert controller_points.shape[0] == controller_colors.shape[0]
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(controller_points)
         pcd.colors = o3d.utility.Vector3dVector(controller_colors)
         controller_pcd += pcd
 
-    # # Apply the outlier removal
-    # cl, ind = object_pcd.remove_radius_outlier(nb_points=40, radius=0.01)
-    # object_pcd = object_pcd.select_by_index(ind)
-
-    # cl, ind = controller_pcd.remove_radius_outlier(nb_points=40, radius=0.01)
-    # controller_pcd = controller_pcd.select_by_index(ind)
-
-    # controller_pcd.paint_uniform_color([1, 0, 0])
-
-    # o3d.visualization.draw_geometries([object_pcd, controller_pcd])
+    # coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+    # o3d.visualization.draw_geometries([object_pcd, controller_pcd, coordinate])
+    # exit()
     return object_pcd, controller_pcd
-
-
 
 
 if __name__ == "__main__":
@@ -143,17 +152,8 @@ if __name__ == "__main__":
     num_cam = len(glob.glob(f"{mask_path}/mask_info_*.json"))
     frame_num = len(glob.glob(f"{pcd_path}/*.npz"))
 
-
-    # # # No filter on the tracking part
-    # # Strict Filter: filter trajectories from the vp if the point is not always in the mask (filter the points disappering from the video)
-    track_data = strict_filter_track(track_path, mask_path, frame_num, num_cam)
-    # with open("test.pkl", "wb") as f:
-    #     pickle.dump(track_data, f)
-
-    # # Load the pkl data
-    # with open("test.pkl", "rb") as f:
-    #     track_data = pickle.load(f)
-
+    # Filter the track data
+    track_data = filter_track(track_path, mask_path, frame_num, num_cam)
 
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -180,13 +180,13 @@ if __name__ == "__main__":
             view_control.set_zoom(1)
         else:
             object_pcd.points = o3d.utility.Vector3dVector(temp_object_pcd.points)
-            # object_pcd.colors = o3d.utility.Vector3dVector(temp_object_pcd.colors)
+            object_pcd.colors = o3d.utility.Vector3dVector(temp_object_pcd.colors)
             controller_pcd.points = o3d.utility.Vector3dVector(
                 temp_controller_pcd.points
             )
-            # controller_pcd.colors = o3d.utility.Vector3dVector(
-            #     temp_controller_pcd.colors
-            # )
+            controller_pcd.colors = o3d.utility.Vector3dVector(
+                temp_controller_pcd.colors
+            )
             vis.update_geometry(object_pcd)
             vis.update_geometry(controller_pcd)
             vis.poll_events()
