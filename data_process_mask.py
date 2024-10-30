@@ -5,11 +5,14 @@ from tqdm import tqdm
 import os
 import glob
 import cv2
+import pickle
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
 case_name = "rope_double_hand"
 OBJECT_NAME = "twine"
 CONTROLLER_NAME = "hand"
+
+processed_masks = {}
 
 
 def exist_dir(dir):
@@ -23,7 +26,11 @@ def read_mask(mask_path):
     mask = mask > 0
     return mask
 
+
 def process_pcd_mask(frame_idx, pcd_path, mask_path, mask_info, num_cam):
+    global processed_masks
+    processed_masks[frame_idx] = {}
+
     # Load the pcd data
     data = np.load(f"{pcd_path}/{frame_idx}.npz")
     points = data["points"]
@@ -46,17 +53,14 @@ def process_pcd_mask(frame_idx, pcd_path, mask_path, mask_info, num_cam):
         object_pcd += pcd
 
         # Load the controller mask
-        controller_points = np.zeros((0, 3))
-        controller_colors = np.zeros((0, 3))
+        controller_mask = np.zeros_like(masks[i])
         for controller_idx in mask_info[i]["controller"]:
             mask = read_mask(f"{mask_path}/{i}/{controller_idx}/{frame_idx}.png")
-            controller_mask = np.logical_and(masks[i], mask)
-            controller_points = np.vstack(
-                [controller_points, points[i][controller_mask]]
-            )
-            controller_colors = np.vstack(
-                [controller_colors, colors[i][controller_mask]]
-            )
+            controller_mask = np.logical_or(controller_mask, mask)
+        controller_mask = np.logical_and(masks[i], controller_mask)
+        controller_points = points[i][controller_mask]
+        controller_colors = colors[i][controller_mask]
+
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(controller_points)
         pcd.colors = o3d.utility.Vector3dVector(controller_colors)
@@ -64,14 +68,76 @@ def process_pcd_mask(frame_idx, pcd_path, mask_path, mask_info, num_cam):
 
     # Apply the outlier removal
     cl, ind = object_pcd.remove_radius_outlier(nb_points=40, radius=0.01)
+    filtered_object_points = np.asarray(
+        object_pcd.select_by_index(ind, invert=True).points
+    )
     object_pcd = object_pcd.select_by_index(ind)
 
     cl, ind = controller_pcd.remove_radius_outlier(nb_points=40, radius=0.01)
+    filtered_controller_points = np.asarray(
+        controller_pcd.select_by_index(ind, invert=True).points
+    )
     controller_pcd = controller_pcd.select_by_index(ind)
 
-    controller_pcd.paint_uniform_color([1, 0, 0])
+    # controller_pcd.paint_uniform_color([1, 0, 0])
+    # o3d.visualization.draw_geometries([object_pcd, controller_pcd])
+    object_pcd = o3d.geometry.PointCloud()
+    controller_pcd = o3d.geometry.PointCloud()
+    for i in range(num_cam):
+        processed_masks[frame_idx][i] = {}
+        # Load the object mask
+        object_idx = mask_info[i]["object"]
+        mask = read_mask(f"{mask_path}/{i}/{object_idx}/{frame_idx}.png")
+        object_mask = np.logical_and(masks[i], mask)
+        object_points = points[i][object_mask]
+        indices = np.nonzero(object_mask)
+        indices_list = list(zip(indices[0], indices[1]))
+        # Locate all the object_points in the filtered points
+        object_indices = []
+        for j, point in enumerate(object_points):
+            if tuple(point) in filtered_object_points:
+                object_indices.append(j)
+        original_indices = [indices_list[j] for j in object_indices]
+        # Update the object mask
+        for idx in original_indices:
+            object_mask[idx[0], idx[1]] = 0
+        processed_masks[frame_idx][i]["object"] = object_mask
+        
+
+        # Load the controller mask
+        controller_mask = np.zeros_like(masks[i])
+        for controller_idx in mask_info[i]["controller"]:
+            mask = read_mask(f"{mask_path}/{i}/{controller_idx}/{frame_idx}.png")
+            controller_mask = np.logical_or(controller_mask, mask)
+        controller_mask = np.logical_and(masks[i], controller_mask)
+        controller_points = points[i][controller_mask]
+        indices = np.nonzero(controller_mask)
+        indices_list = list(zip(indices[0], indices[1]))
+        # Locate all the controller_points in the filtered points
+        controller_indices = []
+        for j, point in enumerate(controller_points):
+            if tuple(point) in filtered_controller_points:
+                controller_indices.append(j)
+        original_indices = [indices_list[j] for j in controller_indices]
+        # Update the controller mask
+        for idx in original_indices:
+            controller_mask[idx[0], idx[1]] = 0
+        processed_masks[frame_idx][i]["controller"] = controller_mask
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points[i][object_mask])
+        pcd.colors = o3d.utility.Vector3dVector(colors[i][object_mask])
+
+        object_pcd += pcd
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points[i][controller_mask])
+        pcd.colors = o3d.utility.Vector3dVector(colors[i][controller_mask])
+
+        controller_pcd += pcd
 
     # o3d.visualization.draw_geometries([object_pcd, controller_pcd])
+
 
     return object_pcd, controller_pcd
 
@@ -129,3 +195,7 @@ if __name__ == "__main__":
             vis.update_geometry(controller_pcd)
             vis.poll_events()
             vis.update_renderer()
+
+    # Save the processed masks considering both depth filter, semantic filter and outlier filter
+    with open(f"{base_path}/{case_name}/mask/processed_masks.pkl", "wb") as f:
+        pickle.dump(processed_masks, f)
