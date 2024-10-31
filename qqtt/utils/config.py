@@ -36,4 +36,37 @@ class SimpleConfig:
         }
 
 
-cfg = SimpleConfig()
+@singleton
+class RealConfig:
+    def __init__(self):
+        self.FPS = 30
+        self.dt = 5e-5
+        self.num_substeps = round(1.0 / self.FPS / self.dt)
+        self.dashpot_damping = 100
+        self.drag_damping = 3
+        self.base_lr = 1e-3
+        self.iterations = 500
+        self.vis_interval = self.iterations / 10
+        self.init_spring_Y = 3e4
+        self.init_collide_elas = 0.5
+        self.init_collide_fric = 0.3
+        self.collide_object_elas = 0.7
+        self.collide_object_fric = 0.3
+
+        self.radius = 0.01
+        self.max_neighbours = 20
+
+        # Parameters on whether update the collision parameters
+        self.collision_learn = True
+
+    def to_dict(self):
+        # Convert the class to dictionary
+        return {
+            attr: getattr(self, attr)
+            for attr in dir(self)
+            if not callable(getattr(self, attr)) and not attr.startswith("__")
+        }
+
+
+# cfg = SimpleConfig()
+cfg = RealConfig()
