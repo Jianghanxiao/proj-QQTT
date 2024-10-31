@@ -9,15 +9,27 @@ from .config import cfg
 def visualize_pc_real(
     object_points,
     object_colors,
-    object_visibilities,
-    object_motions_valid,
     controller_points,
+    object_visibilities=None,
+    object_motions_valid=None,
     FPS=None,
     visualize=True,
     save_video=False,
     save_path=None,
 ):
     FPS = cfg.FPS if FPS is None else FPS
+
+    # Convert the stuffs to numpy if it's tensor
+    if isinstance(object_points, torch.Tensor):
+        object_points = object_points.cpu().numpy()
+    if isinstance(object_colors, torch.Tensor):
+        object_colors = object_colors.cpu().numpy()
+    if isinstance(object_visibilities, torch.Tensor):
+        object_visibilities = object_visibilities.cpu().numpy()
+    if isinstance(object_motions_valid, torch.Tensor):
+        object_motions_valid = object_motions_valid.cpu().numpy()
+    if isinstance(controller_points, torch.Tensor):
+        controller_points = controller_points.cpu().numpy()
 
     # The pcs is a 4d pcd numpy array with shape (n_frames, n_points, 3)
     vis = o3d.visualization.Visualizer()
@@ -40,49 +52,50 @@ def visualize_pc_real(
         fourcc = cv2.VideoWriter_fourcc(*"avc1")  # Codec for .mp4 file format
         video_writer = cv2.VideoWriter(save_path, fourcc, FPS, (width, height))
 
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(
-        object_points[0, np.where(object_visibilities[0])[0], :]
-    )
-    pcd.colors = o3d.utility.Vector3dVector(
-        object_colors[0, np.where(object_visibilities[0])[0], :]
-    )
-    vis.add_geometry(pcd)
-
     controller_meshes = []
     prev_center = []
-    for i in range(controller_points.shape[1]):
-        center = controller_points[0, i]
-        controller_mesh = o3d.geometry.TriangleMesh.create_sphere(
-            radius=0.01
-        ).translate(center)
-        controller_mesh.paint_uniform_color([0, 0, 1])
-        controller_meshes.append(controller_mesh)
-        vis.add_geometry(controller_mesh)
-        prev_center.append(center)
-
-    # Adjust the viewpoint
-    view_control = vis.get_view_control()
-    view_control.set_front([1, 0, -2])
-    view_control.set_up([0, 0, -1])
-    view_control.set_zoom(1)
-
-    for i in range(1, object_points.shape[0]):
-        pcd.points = o3d.utility.Vector3dVector(
-            object_points[i, np.where(object_visibilities[0])[0], :]
-        )
-        pcd.colors = o3d.utility.Vector3dVector(
-            object_colors[i, np.where(object_visibilities[0])[0], :]
-        )
-        vis.update_geometry(pcd)
-        for j in range(controller_points.shape[1]):
-            center = controller_points[i, j]
-            controller_meshes[j].translate(center - prev_center[j])
-            vis.update_geometry(controller_meshes[j])
-            prev_center[j] = center
-
-        vis.poll_events()
-        vis.update_renderer()
+    for i in range(object_points.shape[0]):
+        object_pcd = o3d.geometry.PointCloud()
+        if object_motions_valid is None:
+            object_pcd.points = o3d.utility.Vector3dVector(object_points[i])
+            object_pcd.colors = o3d.utility.Vector3dVector(object_colors[i])
+        else:
+            object_pcd.points = o3d.utility.Vector3dVector(
+                object_points[i, np.where(object_motions_valid[i])[0], :]
+            )
+            object_pcd.colors = o3d.utility.Vector3dVector(
+                object_colors[i, np.where(object_motions_valid[i])[0], :]
+            )
+        if i == 0:
+            render_object_pcd = object_pcd
+            vis.add_geometry(render_object_pcd)
+            # Use sphere mesh for each controller point
+            for j in range(controller_points.shape[1]):
+                origin = controller_points[i, j]
+                origin_color = [1, 0, 0]
+                controller_mesh = o3d.geometry.TriangleMesh.create_sphere(
+                    radius=0.01
+                ).translate(origin)
+                controller_mesh.paint_uniform_color(origin_color)
+                controller_meshes.append(controller_mesh)
+                vis.add_geometry(controller_meshes[-1])
+                prev_center.append(origin)
+            # Adjust the viewpoint
+            view_control = vis.get_view_control()
+            view_control.set_front([1, 0, -2])
+            view_control.set_up([0, 0, -1])
+            view_control.set_zoom(1)
+        else:
+            render_object_pcd.points = o3d.utility.Vector3dVector(object_pcd.points)
+            render_object_pcd.colors = o3d.utility.Vector3dVector(object_pcd.colors)
+            vis.update_geometry(render_object_pcd)
+            for j in range(controller_points.shape[1]):
+                origin = controller_points[i, j]
+                controller_meshes[j].translate(origin - prev_center[j])
+                vis.update_geometry(controller_meshes[j])
+                prev_center[j] = origin
+            vis.poll_events()
+            vis.update_renderer()
 
         # Capture frame and write to video file if save_video is True
         if save_video:

@@ -1,3 +1,3 @@
 from .logger import logger
-from .visualize import visualize_pc, getCamera, getPcdFromRgbd
+from .visualize import visualize_pc, visualize_pc_real
 from .config import cfg

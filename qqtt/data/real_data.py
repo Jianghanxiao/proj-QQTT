@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import pickle
 from qqtt.utils import logger, visualize_pc_real, cfg
+import matplotlib.pyplot as plt
 
 
 class RealData:
@@ -13,18 +14,27 @@ class RealData:
             data = pickle.load(f)
 
         object_points = data["object_points"]
-        object_colors = data["object_colors"]
+        # object_colors = data["object_colors"]
         object_visibilities = data["object_visibilities"]
         object_motions_valid = data["object_motions_valid"]
         controller_points = data["controller_points"]
 
+        # Get the rainbow color for the object_colors
+        y_min, y_max = np.min(object_points[0, :, 1]), np.max(object_points[0, :, 1])
+        y_normalized = (object_points[0, :, 1] - y_min) / (y_max - y_min)
+        rainbow_colors = plt.cm.rainbow(y_normalized)[:, :3]
+
         self.object_points = torch.tensor(
             object_points, dtype=torch.float32, device=cfg.device
         )
-        self.object_colors = torch.tensor(
-            object_colors, dtype=torch.float32, device=cfg.device
+        # self.object_colors = torch.tensor(
+        #     object_colors, dtype=torch.float32, device=cfg.device
+        # )
+        rainbow_colors = torch.tensor(
+            rainbow_colors, dtype=torch.float32, device=cfg.device
         )
-        # object_visibilities is a binary mask
+        # Make the same rainbow color for each frame
+        self.object_colors = rainbow_colors.repeat(self.object_points.shape[0], 1, 1)
         self.object_visibilities = torch.tensor(
             object_visibilities, dtype=torch.bool, device=cfg.device
         )
@@ -44,17 +54,17 @@ class RealData:
             visualize_pc_real(
                 self.object_points,
                 self.object_colors,
+                self.controller_points,
                 self.object_visibilities,
                 self.object_motions_valid,
-                self.controller_points,
                 visualize=True,
             )
         visualize_pc_real(
             self.object_points,
             self.object_colors,
+            self.controller_points,
             self.object_visibilities,
             self.object_motions_valid,
-            self.controller_points,
             visualize=False,
             save_video=True,
             save_path=f"{self.base_dir}/gt.mp4",

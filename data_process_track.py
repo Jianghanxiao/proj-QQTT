@@ -437,24 +437,28 @@ if __name__ == "__main__":
     num_cam = len(glob.glob(f"{mask_path}/mask_info_*.json"))
     frame_num = len(glob.glob(f"{pcd_path}/*.npz"))
 
-    # Filter the track data using the semantic mask of object and controller
-    track_data = filter_track(track_path, pcd_path, mask_path, frame_num, num_cam)
-    # with open(f"test.pkl", "wb") as f:
-    #     pickle.dump(track_data, f)
-    # with open(f"test.pkl", "rb") as f:
+    if True:
+        # Filter the track data using the semantic mask of object and controller
+        track_data = filter_track(track_path, pcd_path, mask_path, frame_num, num_cam)
+        # with open(f"test.pkl", "wb") as f:
+        #     pickle.dump(track_data, f)
+        # with open(f"test.pkl", "rb") as f:
+        #     track_data = pickle.load(f)
+        # Filter motion
+        track_data = filter_motion(track_data)
+        # # Save the filtered track data
+        # with open(f"test2.pkl", "wb") as f:
+        #     pickle.dump(track_data, f)
+
+        # with open(f"test2.pkl", "rb") as f:
+        #     track_data = pickle.load(f)
+
+        track_data = get_final_track_data(track_data)
+
+        with open(f"{base_path}/{case_name}/final_track_data.pkl", "wb") as f:
+            pickle.dump(track_data, f)
+
+    # with open(f"{base_path}/{case_name}/final_track_data.pkl", "rb") as f:
     #     track_data = pickle.load(f)
-    # Filter motion
-    track_data = filter_motion(track_data)
-    # # Save the filtered track data
-    # with open(f"test2.pkl", "wb") as f:
-    #     pickle.dump(track_data, f)
-
-    # with open(f"test2.pkl", "rb") as f:
-    #     track_data = pickle.load(f)
-
-    track_data = get_final_track_data(track_data)
-
-    with open(f"{base_path}/{case_name}/final_track_data.pkl", "wb") as f:
-        pickle.dump(track_data, f)
 
     visualize_track(track_data)
