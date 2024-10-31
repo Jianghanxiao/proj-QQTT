@@ -28,6 +28,9 @@ class SpringMassSystem(nn.Module):
         init_masks=None,
         init_velocities=None,
         collision_dist=0.04,
+        num_object_points=None,
+        controller_points=None,
+        reverse_z=False,
     ):
         logger.info(f"[SIMULATION]: Initialize the Spring-Mass System")
         super().__init__()
@@ -44,6 +47,22 @@ class SpringMassSystem(nn.Module):
         self.springs = init_springs
         self.rest_lengths = init_rest_lengths
         self.masses = init_masses
+
+        if controller_points is None:
+            assert num_object_points is None
+            num_object_points = self.n_vertices
+        else:
+            assert num_object_points is not None
+            assert (controller_points.shape[1] + num_object_points) == self.n_vertices
+        self.num_object_points = num_object_points
+        self.controller_points = controller_points
+        # Handle the controller mask
+        self.object_mask = torch.zeros(
+            self.n_vertices, dtype=torch.int, device=self.device
+        )
+        self.object_mask[: self.num_object_points] = 1
+        self.controller_mask = 1 - self.object_mask
+
         self.no_object_collision = False
         if init_masks is None:
             self.masks = torch.zeros(
@@ -104,9 +123,13 @@ class SpringMassSystem(nn.Module):
         self.drag_damping = drag_damping
 
         self.collision_dist = collision_dist
-        self.collisionDetector = CollisionDetector(len(self.x), self.collision_dist)
+        self.collisionDetector = CollisionDetector(
+            num_object_points, self.collision_dist
+        )
         self.object_collision_interval = 10
         self.object_interval_index = 0
+
+        self.reverse_factor = 1.0 if not reverse_z else -1.0
 
         # representations for the bbx collisons, the object masks does not change
         unique_masks, inverse_indices = torch.unique(self.masks, return_inverse=True)
@@ -151,6 +174,12 @@ class SpringMassSystem(nn.Module):
         self.object_interval_index = 0
         self.detach()
 
+    def set_controller(self, frame_idx):
+        self.x[self.num_object_points :] = self.controller_points[frame_idx]
+        self.v[self.num_object_points :] = torch.zeros(
+            (self.controller_points.size(1), 3), device=self.device
+        )
+
     def step(self):
         for i in range(self.num_substeps):
             self.substep()
@@ -175,8 +204,10 @@ class SpringMassSystem(nn.Module):
         vertice_forces = torch.zeros((self.n_vertices, 3), device=self.device)
 
         # Add teh gravity force
-        vertice_forces += self.masses[:, None] * torch.tensor(
-            [0.0, 0.0, -9.8], device=self.device
+        vertice_forces += (
+            self.masses[:, None]
+            * torch.tensor([0.0, 0.0, -9.8], device=self.device)
+            * self.reverse_factor
         )
         # Calculate the spring forces
         idx1 = self.springs[:, 0]
@@ -210,12 +241,16 @@ class SpringMassSystem(nn.Module):
 
         self.impulse_collision()
         if self.collision_mask.any():
-            self.x[self.collision_mask] += (
-                self.toi[:, None] * self.v_old[self.collision_mask]
-                + (self.dt - self.toi)[:, None] * self.v[self.collision_mask]
+            # Only update the object points
+            final_mask = torch.logical_and(self.object_mask, self.collision_mask)
+            self.x[final_mask] += (
+                self.toi[:, None] * self.v_old[final_mask]
+                + (self.dt - self.toi)[:, None] * self.v[final_mask]
             )
 
-        self.x[~self.collision_mask] += self.dt * self.v[~self.collision_mask]
+        # Only update the object points
+        final_mask = torch.logical_and(self.object_mask, ~self.collision_mask)
+        self.x[final_mask] += self.dt * self.v[final_mask]
 
     def impulse_collision(self):
         # Check collisions with the ground
@@ -240,8 +275,10 @@ class SpringMassSystem(nn.Module):
         with torch.no_grad():
             # Quick collision detection using bounding boxes
             for i in range(self.num_objects):
-                self.min_coords[i] = self.x[self.object_masks[i]].min(dim=0)[0]
-                self.max_coords[i] = self.x[self.object_masks[i]].max(dim=0)[0]
+                # Make sure the points are not the controller points
+                final_mask = torch.logical_and(self.object_mask, self.object_masks[i])
+                self.min_coords[i] = self.x[final_mask].min(dim=0)[0]
+                self.max_coords[i] = self.x[final_mask].max(dim=0)[0]
 
             overlap_x = (
                 self.max_coords[self.pairs[:, 0], 0] + self.collision_dist
@@ -272,7 +309,7 @@ class SpringMassSystem(nn.Module):
     def object_collision(self):
         with torch.no_grad():
             collisions = self.collisionDetector.reset(
-                self.x.detach().clone(), self.masks
+                self.x[self.object_mask].detach().clone(), self.masks
             )
 
         # # The most naive collision detection
@@ -365,19 +402,20 @@ class SpringMassSystem(nn.Module):
     def ground_collision(self):
         self.v_old = self.v.clone()
 
-        normal = torch.tensor([0.0, 0.0, 1.0], device=self.device)
+        normal = torch.tensor([0.0, 0.0, 1.0], device=self.device) * self.reverse_factor
 
         # Check which vertices are below the ground and have velocity components going downward
         with torch.no_grad():
-            collision_mask = (self.x[:, 2] + self.v[:, 2] * self.dt < 0) & (
-                torch.einsum("ij,j->i", self.v, normal) < -1e-4
-            )
-            self.collision_mask = collision_mask
+            collision_mask = (
+                ((self.x[:, 2] + self.v[:, 2] * self.dt) * self.reverse_factor) < 0
+            ) & (torch.einsum("ij,j->i", self.v, normal) < -1e-4)
+            # Just handle the ground collision for non-controller points
+            self.collision_mask = torch.logical_and(collision_mask, self.object_mask)
 
         if collision_mask.any():
             # Select the vertices that are colliding
             v_i = self.v[collision_mask]
-            
+
             # Calculate the time of impact
             self.toi = -self.x[collision_mask, 2] / v_i[:, 2]
 

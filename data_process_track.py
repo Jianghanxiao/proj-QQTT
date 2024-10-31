@@ -429,6 +429,45 @@ def visualize_track(track_data):
             vis.poll_events()
             vis.update_renderer()
 
+def process_unique_points(track_data, point_num=1024):
+    object_points = track_data["object_points"]
+    object_colors = track_data["object_colors"]
+    object_visibilities = track_data["object_visibilities"]
+    object_motions_valid = track_data["object_motions_valid"]
+    controller_points = track_data["controller_points"]
+
+    # Get the unique index in the object points
+    first_object_points = object_points[0]
+    unique_idx = np.unique(first_object_points, axis=0, return_index=True)[1]
+    object_points = object_points[:, unique_idx, :]
+    object_colors = object_colors[:, unique_idx, :]
+    object_visibilities = object_visibilities[:, unique_idx]
+    object_motions_valid = object_motions_valid[:, unique_idx]
+
+    # Do farthest point sampling for object points and get the index
+    object_pcd = o3d.geometry.PointCloud()
+    object_pcd.points = o3d.utility.Vector3dVector(
+        object_points[0]
+    )
+    new_pcd = object_pcd.farthest_point_down_sample(point_num)
+    new_points = np.asarray(new_pcd.points)
+
+    index = []
+    for i in range(object_points.shape[1]):
+        if object_points[0, i] in new_points:
+            index.append(i)
+    
+    track_data.pop("object_points")
+    track_data.pop("object_colors")
+    track_data.pop("object_visibilities")
+    track_data.pop("object_motions_valid")
+    track_data["object_points"] = object_points[:, index, :]
+    track_data["object_colors"] = object_colors[:, index, :]
+    track_data["object_visibilities"] = object_visibilities[:, index]
+    track_data["object_motions_valid"] = object_motions_valid[:, index]
+
+    return track_data
+
 if __name__ == "__main__":
     pcd_path = f"{base_path}/{case_name}/pcd"
     mask_path = f"{base_path}/{case_name}/mask"
@@ -455,10 +494,15 @@ if __name__ == "__main__":
 
         track_data = get_final_track_data(track_data)
 
-        with open(f"{base_path}/{case_name}/final_track_data.pkl", "wb") as f:
+        with open(f"test3.pkl", "wb") as f:
             pickle.dump(track_data, f)
 
-    # with open(f"{base_path}/{case_name}/final_track_data.pkl", "rb") as f:
-    #     track_data = pickle.load(f)
+        track_data = process_unique_points(track_data)
+
+        with open(f"{base_path}/{case_name}/final_track_data.pkl", "wb") as f:
+                pickle.dump(track_data, f)
+
+    with open(f"{base_path}/{case_name}/final_track_data.pkl", "rb") as f:
+        track_data = pickle.load(f)
 
     visualize_track(track_data)

@@ -43,6 +43,7 @@ python data_process_pcd.py
 ```
 
 # Record data
+Controller need to be in the same location on the object in the whole sequence
 ```
 python cameras_calibrate.py
 python record_data.py
@@ -57,3 +58,6 @@ python data_process_mask.py
 python get_track.py
 # Further process the data with other foundation models (Go back to our current repo)
 ```
+
+# Optimize the physical parameters
+python real_train.py

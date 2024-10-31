@@ -14,7 +14,7 @@ class RealData:
             data = pickle.load(f)
 
         object_points = data["object_points"]
-        # object_colors = data["object_colors"]
+        object_colors = data["object_colors"]
         object_visibilities = data["object_visibilities"]
         object_motions_valid = data["object_motions_valid"]
         controller_points = data["controller_points"]
@@ -30,11 +30,19 @@ class RealData:
         # self.object_colors = torch.tensor(
         #     object_colors, dtype=torch.float32, device=cfg.device
         # )
+        # Apply the rainbow color to the object_colors
         rainbow_colors = torch.tensor(
             rainbow_colors, dtype=torch.float32, device=cfg.device
         )
         # Make the same rainbow color for each frame
         self.object_colors = rainbow_colors.repeat(self.object_points.shape[0], 1, 1)
+
+        # # Apply the first frame color to all frames
+        # first_frame_colors = torch.tensor(
+        #     object_colors[0], dtype=torch.float32, device=cfg.device
+        # )
+        # self.object_colors = first_frame_colors.repeat(self.object_points.shape[0], 1, 1)
+
         self.object_visibilities = torch.tensor(
             object_visibilities, dtype=torch.bool, device=cfg.device
         )

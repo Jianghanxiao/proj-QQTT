@@ -46,14 +46,17 @@ class RealConfig:
         self.drag_damping = 3
         self.base_lr = 1e-3
         self.iterations = 500
-        self.vis_interval = self.iterations / 10
+        self.vis_interval = 15
         self.init_spring_Y = 3e4
         self.init_collide_elas = 0.5
         self.init_collide_fric = 0.3
         self.collide_object_elas = 0.7
         self.collide_object_fric = 0.3
 
-        self.radius = 0.01
+        self.chamfer_weight = 1
+        self.track_weight = 0.1
+
+        self.radius = 0.02
         self.max_neighbours = 20
 
         # Parameters on whether update the collision parameters

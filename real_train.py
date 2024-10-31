@@ -30,9 +30,8 @@ def demo_real():
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect/rope_double_hand/final_track_data.pkl",
         base_dir=base_dir,
     )
-    # trainer.train()
+    trainer.train()
     # trainer.test("/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/rigid/train/iter_199.pth")
-
 
 
 if __name__ == "__main__":
