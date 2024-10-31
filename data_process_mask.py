@@ -102,7 +102,6 @@ def process_pcd_mask(frame_idx, pcd_path, mask_path, mask_info, num_cam):
         for idx in original_indices:
             object_mask[idx[0], idx[1]] = 0
         processed_masks[frame_idx][i]["object"] = object_mask
-        
 
         # Load the controller mask
         controller_mask = np.zeros_like(masks[i])
@@ -137,7 +136,6 @@ def process_pcd_mask(frame_idx, pcd_path, mask_path, mask_info, num_cam):
         controller_pcd += pcd
 
     # o3d.visualization.draw_geometries([object_pcd, controller_pcd])
-
 
     return object_pcd, controller_pcd
 
