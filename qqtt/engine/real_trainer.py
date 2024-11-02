@@ -9,6 +9,7 @@ import wandb
 import os
 from pytorch3d.loss import chamfer_distance
 from tqdm import tqdm
+import time
 
 
 class RealInvPhyTrainer:
@@ -175,15 +176,19 @@ class RealInvPhyTrainer:
             total_loss = 0.0
             total_chamfer_loss = 0.0
             total_track_loss = 0.0
+            loss = torch.tensor(0.0, device=cfg.device)
             for j in tqdm(range(1, self.dataset.frame_len)):
                 self.simulator.set_controller(j)
                 x, _, _, _ = self.simulator.step()
-                loss, chamfer_loss, track_loss = self.compute_loss(j, x)
+                temp_loss, chamfer_loss, track_loss = self.compute_loss(j, x)
+                loss += temp_loss
                 self.optimizer.zero_grad()
-                loss.backward()
+                if j % 10 == 0 or j == self.dataset.frame_len - 1:
+                    loss.backward()
+                    total_loss += loss.item()
+                    loss = torch.tensor(0.0, device=cfg.device)
                 self.optimizer.step()
                 self.simulator.detach()
-                total_loss += loss.item()
                 total_chamfer_loss += chamfer_loss.item()
                 total_track_loss += track_loss.item()
                 # if torch.isnan(self.simulator.spring_Y.grad).sum() > 0:
