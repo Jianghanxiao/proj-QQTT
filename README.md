@@ -59,7 +59,10 @@ python test_real.py
 python data_process_mask.py
 # Get the track data from CoTracker
 python get_track.py
-# Further process the data with other foundation models (Go back to our current repo)
+# Process the track data
+python data_process_track.py
+# Do shapre reconstruction for the first frame and do the downsampling of the points
+python data_process_sample.py
 ```
 
 # Optimize the physical parameters
