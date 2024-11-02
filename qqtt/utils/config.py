@@ -54,7 +54,7 @@ class RealConfig:
         self.collide_object_fric = 0.3
 
         self.chamfer_weight = 1
-        self.track_weight = 0.1
+        self.track_weight = 1
 
         self.radius = 0.01
         self.max_neighbours = 20
