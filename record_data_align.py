@@ -57,6 +57,8 @@ if __name__ == "__main__":
             final_frames.append(current_frame)
 
     new_metadata["frame_num"] = frame_num
+    new_metadata["start_step"] = start_step
+    new_metadata["end_step"] = end_step
     # Move the files into a final data format
     exist_dir(f"{output_path}")
     exist_dir(f"{output_path}/{case_name}")

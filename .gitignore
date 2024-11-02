@@ -9,6 +9,8 @@ data_collect*
 *.pkl
 past*
 deprecated/
+*.npz
+test_code/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

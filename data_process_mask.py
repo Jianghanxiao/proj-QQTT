@@ -197,3 +197,40 @@ if __name__ == "__main__":
     # Save the processed masks considering both depth filter, semantic filter and outlier filter
     with open(f"{base_path}/{case_name}/mask/processed_masks.pkl", "wb") as f:
         pickle.dump(processed_masks, f)
+
+    # Generate the videos with for masked objects and controllers
+    exist_dir(f"{base_path}/{case_name}/temp_mask")
+    for i in range(num_cam):
+        exist_dir(f"{base_path}/{case_name}/temp_mask/{i}")
+        exist_dir(f"{base_path}/{case_name}/temp_mask/{i}/object")
+        exist_dir(f"{base_path}/{case_name}/temp_mask/{i}/controller")
+        object_idx = mask_info[i]["object"]
+        for frame_idx in range(frame_num):
+            object_mask = read_mask(f"{mask_path}/{i}/{object_idx}/{frame_idx}.png")
+            img = cv2.imread(f"{base_path}/{case_name}/color/{i}/{frame_idx}.png")
+            masked_object_img = cv2.bitwise_and(
+                img, img, mask=object_mask.astype(np.uint8) * 255
+            )
+            cv2.imwrite(
+                f"{base_path}/{case_name}/temp_mask/{i}/object/{frame_idx}.png",
+                masked_object_img,
+            )
+
+            controller_mask = np.zeros_like(object_mask)
+            for controller_idx in mask_info[i]["controller"]:
+                mask = read_mask(f"{mask_path}/{i}/{controller_idx}/{frame_idx}.png")
+                controller_mask = np.logical_or(controller_mask, mask)
+            masked_controller_img = cv2.bitwise_and(
+                img, img, mask=controller_mask.astype(np.uint8) * 255
+            )
+            cv2.imwrite(
+                f"{base_path}/{case_name}/temp_mask/{i}/controller/{frame_idx}.png",
+                masked_controller_img,
+            )
+
+        os.system(
+            f"ffmpeg -r 30 -start_number 0 -f image2 -i {base_path}/{case_name}/temp_mask/{i}/object/%d.png -vcodec libx264 -crf 0  -pix_fmt yuv420p {base_path}/{case_name}/temp_mask/object_{i}.mp4"
+        )
+        os.system(
+            f"ffmpeg -r 30 -start_number 0 -f image2 -i {base_path}/{case_name}/temp_mask/{i}/controller/%d.png -vcodec libx264 -crf 0  -pix_fmt yuv420p {base_path}/{case_name}/temp_mask/controller_{i}.mp4"
+        )

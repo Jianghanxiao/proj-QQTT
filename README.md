@@ -21,6 +21,9 @@ pip install cma
 # For pytorch3D
 conda install -c iopath iopath
 conda install pytorch3d -c pytorch3d
+pip install trimesh
+pip install "pyglet<2"
+pip install rtree
 ```
 
 The env for cameras:
