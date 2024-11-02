@@ -133,7 +133,7 @@ class RealInvPhyTrainer:
             points = np.concatenate([points, controller_points], axis=0)
             for i in range(len(controller_points)):
                 [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
-                    controller_points[i], radius, max_neighbours
+                    controller_points[i], radius / 2, max_neighbours
                 )
                 for j in idx:
                     springs.append([num_object_points + i, j])

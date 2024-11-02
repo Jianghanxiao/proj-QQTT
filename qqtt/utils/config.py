@@ -46,7 +46,7 @@ class RealConfig:
         self.drag_damping = 3
         self.base_lr = 1e-3
         self.iterations = 500
-        self.vis_interval = 15
+        self.vis_interval = 10
         self.init_spring_Y = 3e4
         self.init_collide_elas = 0.5
         self.init_collide_fric = 0.3
