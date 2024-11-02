@@ -85,8 +85,8 @@ def process_unique_points(track_data, point_num=1024):
     track_data["object_colors"] = object_colors[:, index, :]
     track_data["object_visibilities"] = object_visibilities[:, index]
     track_data["object_motions_valid"] = object_motions_valid[:, index]
-    track_data["surface_points"] = final_surface_points
-    track_data["interior_points"] = final_interior_points
+    track_data["surface_points"] = np.array(final_surface_points)
+    track_data["interior_points"] = np.array(final_interior_points)
 
     return track_data
 

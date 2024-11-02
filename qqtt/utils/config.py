@@ -47,7 +47,7 @@ class RealConfig:
         self.base_lr = 1e-3
         self.iterations = 500
         self.vis_interval = 10
-        self.init_spring_Y = 3e4
+        self.init_spring_Y = 3e3
         self.init_collide_elas = 0.5
         self.init_collide_fric = 0.3
         self.collide_object_elas = 0.7
@@ -56,7 +56,7 @@ class RealConfig:
         self.chamfer_weight = 1
         self.track_weight = 0.1
 
-        self.radius = 0.02
+        self.radius = 0.01
         self.max_neighbours = 20
 
         # Parameters on whether update the collision parameters

@@ -30,6 +30,10 @@ class RealInvPhyTrainer:
         self.object_visibilities = self.dataset.object_visibilities
         self.object_motions_valid = self.dataset.object_motions_valid
         self.controller_points = self.dataset.controller_points
+        self.structure_points = self.dataset.structure_points
+        self.num_original_points = self.dataset.num_original_points
+        self.num_surface_points = self.dataset.num_surface_points
+        self.num_all_points = self.dataset.num_all_points
 
         # Initialize the vertices, springs, rest lengths and masses
         (
@@ -37,9 +41,8 @@ class RealInvPhyTrainer:
             self.init_springs,
             self.init_rest_lengths,
             self.init_masses,
-            num_object_points,
         ) = self._init_start(
-            self.object_points[0],
+            self.structure_points,
             self.controller_points[0],
             radius=cfg.radius,
             max_neighbours=cfg.max_neighbours,
@@ -63,12 +66,10 @@ class RealInvPhyTrainer:
             collide_object_fric=cfg.collide_object_fric,
             init_masks=self.init_masks,
             init_velocities=self.init_velocities,
-            num_object_points=num_object_points,
+            num_object_points=self.num_all_points,
             controller_points=self.controller_points,
             reverse_z=True,
         )
-
-        self.num_object_points = num_object_points
 
         self.optimizer = torch.optim.Adam(
             self.simulator.parameters(), lr=cfg.base_lr, betas=(0.9, 0.99)
@@ -149,10 +150,13 @@ class RealInvPhyTrainer:
                 torch.tensor(springs, dtype=torch.int32, device=cfg.device),
                 torch.tensor(rest_lengths, dtype=torch.float32, device=cfg.device),
                 torch.tensor(masses, dtype=torch.float32, device=cfg.device),
-                num_object_points,
             )
 
     def train(self, start_epoch=-1):
+        # Render the initial visualization
+        video_path = f"{cfg.base_dir}/train/init.mp4"
+        self.visualize_sim(save_only=True, video_path=video_path)
+
         best_loss = None
         best_epoch = None
         # Train the model with the physical simulator
@@ -258,7 +262,7 @@ class RealInvPhyTrainer:
 
         # Compute the single-direction chamfer loss for the object points
         chamfer_object_points = current_object_points[current_object_visibilities]
-        chamfer_x = x[: self.num_object_points]
+        chamfer_x = x[: self.num_surface_points]
         # The GT chamfer_object_points can be partial,first find the nearest in second
         chamfer_loss = chamfer_distance(
             chamfer_object_points.unsqueeze(0),
@@ -268,7 +272,7 @@ class RealInvPhyTrainer:
 
         # Compute the tracking loss for the object points
         gt_track_points = current_object_points[current_object_motions_valid]
-        pred_x = x[: self.num_object_points][current_object_motions_valid]
+        pred_x = x[: self.num_original_points][current_object_motions_valid]
         track_loss = smooth_l1_loss(pred_x, gt_track_points, beta=1.0, reduction="mean")
 
         return (
@@ -280,6 +284,7 @@ class RealInvPhyTrainer:
     def visualize_sim(
         self, save_only=True, video_path=None, springs=None, spring_params=None
     ):
+        logger.info("Visualizing the simulation")
         # Visualize the whole simulation using current set of parameters in the physical simulator
         with torch.no_grad():
             # Need to reset the simulator to the initial state
@@ -305,7 +310,7 @@ class RealInvPhyTrainer:
             vertices = torch.stack(vertices, dim=0)
             if not save_only:
                 visualize_pc_real(
-                    vertices[: self.num_object_points],
+                    vertices[: self.num_all_points],
                     self.object_colors,
                     self.controller_points,
                     visualize=True,
@@ -313,7 +318,7 @@ class RealInvPhyTrainer:
             else:
                 assert video_path is not None, "Please provide the video path to save"
                 visualize_pc_real(
-                    vertices[:, : self.num_object_points, :],
+                    vertices[:, : self.num_all_points, :],
                     self.object_colors,
                     self.controller_points,
                     visualize=False,

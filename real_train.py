@@ -24,10 +24,10 @@ set_all_seeds(seed)
 def demo_real():
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/rope_double_hand"
+    base_dir = f"experiments/rope_double_hand_debug"
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = RealInvPhyTrainer(
-        data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect/rope_double_hand/final_track_data.pkl",
+        data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect/rope_double_hand/final_data.pkl",
         base_dir=base_dir,
     )
     trainer.train()

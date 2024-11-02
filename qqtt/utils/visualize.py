@@ -31,6 +31,18 @@ def visualize_pc_real(
     if isinstance(controller_points, torch.Tensor):
         controller_points = controller_points.cpu().numpy()
 
+    if object_colors.shape[1] < object_points.shape[1]:
+        # If the object_colors is not the same as object_points, fill the colors with black
+        object_colors = np.concatenate(
+            [
+                object_colors,
+                np.zeros(
+                    (object_colors.shape[0], object_points.shape[1] - object_colors.shape[1], 3)
+                ),
+            ],
+            axis=1,
+        )
+
     # The pcs is a 4d pcd numpy array with shape (n_frames, n_points, 3)
     vis = o3d.visualization.Visualizer()
     vis.create_window(visible=visualize)

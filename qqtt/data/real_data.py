@@ -18,11 +18,27 @@ class RealData:
         object_visibilities = data["object_visibilities"]
         object_motions_valid = data["object_motions_valid"]
         controller_points = data["controller_points"]
+        other_surface_points = data["surface_points"]
+        interior_points = data["interior_points"]
 
         # Get the rainbow color for the object_colors
         y_min, y_max = np.min(object_points[0, :, 1]), np.max(object_points[0, :, 1])
         y_normalized = (object_points[0, :, 1] - y_min) / (y_max - y_min)
         rainbow_colors = plt.cm.rainbow(y_normalized)[:, :3]
+
+        self.num_original_points = object_points.shape[1]
+        self.num_surface_points = (
+            self.num_original_points + other_surface_points.shape[0]
+        )
+        self.num_all_points = self.num_surface_points + interior_points.shape[0]
+
+        # Concatenate the surface points and interior points
+        self.structure_points = np.concatenate(
+            [object_points[0], other_surface_points, interior_points], axis=0
+        )
+        self.structure_points = torch.tensor(
+            self.structure_points, dtype=torch.float32, device=cfg.device
+        )
 
         self.object_points = torch.tensor(
             object_points, dtype=torch.float32, device=cfg.device
