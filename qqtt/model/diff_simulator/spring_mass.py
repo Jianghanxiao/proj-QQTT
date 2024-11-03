@@ -175,13 +175,22 @@ class SpringMassSystem(nn.Module):
         self.detach()
 
     def set_controller(self, frame_idx):
-        self.x[self.num_object_points :] = self.controller_points[frame_idx]
-        self.v[self.num_object_points :] = torch.zeros(
-            (self.controller_points.size(1), 3), device=self.device
-        )
+        self.original_control_point = self.controller_points[frame_idx - 1]
+        self.target_control_point = self.controller_points[frame_idx]
 
     def step(self):
         for i in range(self.num_substeps):
+            if not self.controller_points is None:
+                # Set the control points in each substep
+                self.x[self.num_object_points :] = (
+                    self.original_control_point
+                    + (self.target_control_point - self.original_control_point)
+                    * (i + 1)
+                    / self.num_substeps
+                )
+                self.v[self.num_object_points :] = torch.zeros(
+                    (self.controller_points.size(1), 3), device=self.device
+                )
             self.substep()
 
         return (
