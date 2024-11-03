@@ -281,6 +281,18 @@ class RealInvPhyTrainer:
             track_loss,
         )
 
+    def test(self, model_path):
+        # Load the model
+        logger.info(f"Load model from {model_path}")
+        checkpoint = torch.load(model_path, map_location=cfg.device)
+        self.simulator.load_state_dict(checkpoint["model_state_dict"])
+        self.simulator.to(cfg.device)
+
+        # Render the initial visualization
+        self.visualize_sim(save_only=False)
+        import pdb
+        pdb.set_trace()
+
     def visualize_sim(
         self, save_only=True, video_path=None, springs=None, spring_params=None
     ):
