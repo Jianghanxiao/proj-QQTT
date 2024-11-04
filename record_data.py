@@ -13,3 +13,7 @@ if __name__ == "__main__":
     camera_system.record(
         output_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data_collect/{current_time}"
     )
+    # Copy the camera calibration file to the output path
+    os.system(
+        f"cp /home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/calibrate.pkl /home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data_collect/{current_time}"
+    )

@@ -4,10 +4,10 @@ import json
 
 num_cameras = 3
 output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
-calibrate_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/calibrate.pkl"
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data_collect"
-case_name = "test_static"
+case_name = "test"
+calibrate_path = f"{base_path}/{case_name}/calibrate.pkl"
 # Need to manually control this for each video to cut (based on camera 0 always)
 start_step = 150
 end_step = 155

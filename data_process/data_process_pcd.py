@@ -7,7 +7,7 @@ from tqdm import tqdm
 import os
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
-case_name = "rope_double_hand"
+case_name = "test"
 
 
 # Use code from https://github.com/Jianghanxiao/Helper3D/blob/master/open3d_RGBD/src/camera/cameraHelper.py
