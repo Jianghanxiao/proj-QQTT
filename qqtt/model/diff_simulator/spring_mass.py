@@ -31,6 +31,8 @@ class SpringMassSystem(nn.Module):
         num_object_points=None,
         controller_points=None,
         reverse_z=False,
+        spring_Y_min=1e3,
+        spring_Y_max=1e5,
     ):
         logger.info(f"[SIMULATION]: Initialize the Spring-Mass System")
         super().__init__()
@@ -47,6 +49,8 @@ class SpringMassSystem(nn.Module):
         self.springs = init_springs
         self.rest_lengths = init_rest_lengths
         self.masses = init_masses
+        self.spring_Y_min = spring_Y_min
+        self.spring_Y_max = spring_Y_max
 
         if controller_points is None:
             assert num_object_points is None
@@ -219,8 +223,10 @@ class SpringMassSystem(nn.Module):
             * self.reverse_factor
         )
         # Calculate the spring forces
-        idx1 = self.springs[:, 0]
-        idx2 = self.springs[:, 1]
+        spring_mask = torch.exp(self.spring_Y) > self.spring_Y_min
+
+        idx1 = self.springs[spring_mask][:, 0]
+        idx2 = self.springs[spring_mask][:, 1]
         x1 = self.x[idx1]
         x2 = self.x[idx2]
         dis = x2 - x1
@@ -228,8 +234,12 @@ class SpringMassSystem(nn.Module):
             torch.norm(dis, dim=1)[:, None], torch.tensor(1e-6, device=self.device)
         )
         self.spring_forces = (
-            torch.exp(self.spring_Y)[:, None]
-            * (torch.norm(dis, dim=1) / self.rest_lengths - 1)[:, None]
+            nclamp(
+                torch.exp(self.spring_Y[spring_mask])[:, None],
+                min=None,
+                max=self.spring_Y_max,
+            )
+            * (torch.norm(dis, dim=1) / self.rest_lengths[spring_mask] - 1)[:, None]
             * d
         )
 

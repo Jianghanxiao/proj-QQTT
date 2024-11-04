@@ -59,6 +59,9 @@ class RealConfig:
         self.radius = 0.01
         self.max_neighbours = 20
 
+        self.spring_Y_min = 1e3
+        self.spring_Y_max = 1e5
+
         # Parameters on whether update the collision parameters
         self.collision_learn = True
 

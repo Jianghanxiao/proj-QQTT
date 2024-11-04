@@ -69,6 +69,8 @@ class RealInvPhyTrainer:
             num_object_points=self.num_all_points,
             controller_points=self.controller_points,
             reverse_z=True,
+            spring_Y_min=cfg.spring_Y_min,
+            spring_Y_max=cfg.spring_Y_max,
         )
 
         self.optimizer = torch.optim.Adam(
