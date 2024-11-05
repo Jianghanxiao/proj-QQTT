@@ -199,6 +199,7 @@ class SpringMassSystem(nn.Module):
 
         return (
             self.x,
+            self.v,
             self.springs,
             self.rest_lengths,
             self.spring_forces,

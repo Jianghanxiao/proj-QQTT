@@ -136,7 +136,7 @@ class RealInvPhyTrainer:
             points = np.concatenate([points, controller_points], axis=0)
             for i in range(len(controller_points)):
                 [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
-                    controller_points[i], radius / 2, max_neighbours
+                    controller_points[i], radius * 2, max_neighbours * 4
                 )
                 for j in idx:
                     springs.append([num_object_points + i, j])
@@ -177,10 +177,21 @@ class RealInvPhyTrainer:
             total_loss = 0.0
             total_chamfer_loss = 0.0
             total_track_loss = 0.0
+            total_acc_loss = 0.0
+            prev_v = torch.zeros_like(self.init_vertices)
+            prev_prev_v = None
             for j in tqdm(range(1, self.dataset.frame_len)):
                 self.simulator.set_controller(j)
-                x, _, _, _ = self.simulator.step()
+                x, v, _, _, _ = self.simulator.step()
                 loss, chamfer_loss, track_loss = self.compute_loss(j, x)
+                if prev_v is not None and prev_prev_v is not None:
+                    acc_loss = 0.01 * smooth_l1_loss(
+                        v - prev_v, prev_v - prev_prev_v, beta=1.0, reduction="mean"
+                    )
+                    loss += acc_loss
+                    total_acc_loss += acc_loss.item()
+                prev_prev_v = prev_v
+                prev_v = v.detach().clone()
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -196,11 +207,13 @@ class RealInvPhyTrainer:
             total_loss /= self.dataset.frame_len - 1
             total_chamfer_loss /= self.dataset.frame_len - 1
             total_track_loss /= self.dataset.frame_len - 1
+            total_acc_loss /= self.dataset.frame_len - 2
             wandb.log(
                 {
                     "loss": total_loss,
                     "chamfer_loss": total_chamfer_loss,
                     "track_loss": total_track_loss,
+                    "acc_loss": total_acc_loss,
                     "collide_else": self.simulator.collide_elas.item(),
                     "collide_fric": self.simulator.collide_fric.item(),
                     "collide_object_elas": self.simulator.collide_object_elas.item(),
@@ -293,7 +306,19 @@ class RealInvPhyTrainer:
         # Render the initial visualization
         self.visualize_sim(save_only=False)
         import pdb
+
         pdb.set_trace()
+
+    def resume_train(self, model_path):
+        # Load the model
+        checkpoint = torch.load(model_path, map_location=cfg.device)
+        epoch = checkpoint["epoch"]
+        logger.info(f"Continue training with model from {model_path} at epoch {epoch}")
+        self.simulator.load_state_dict(checkpoint["model_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.simulator.to(cfg.device)
+
+        self.train(epoch)
 
     def visualize_sim(
         self, save_only=True, video_path=None, springs=None, spring_params=None
@@ -318,7 +343,7 @@ class RealInvPhyTrainer:
             frame_len = self.dataset.frame_len
             for i in tqdm(range(frame_len - 1)):
                 self.simulator.set_controller(i)
-                x, _, _, _ = self.simulator.step()
+                x, _, _, _, _ = self.simulator.step()
                 vertices.append(x.cpu())
 
             vertices = torch.stack(vertices, dim=0)
