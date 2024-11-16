@@ -342,7 +342,7 @@ class RealInvPhyTrainer:
             vertices = [self.init_vertices.cpu()]
 
             frame_len = self.dataset.frame_len
-            for i in tqdm(range(frame_len - 1)):
+            for i in tqdm(range(1, frame_len)):
                 self.simulator.set_controller(i)
                 x, _, _, _, _ = self.simulator.step()
                 vertices.append(x.cpu())
