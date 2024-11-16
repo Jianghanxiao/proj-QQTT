@@ -188,7 +188,8 @@ class RealInvPhyTrainer:
                     acc_loss = 0.01 * smooth_l1_loss(
                         v - prev_v, prev_v - prev_prev_v, beta=1.0, reduction="mean"
                     )
-                    loss += acc_loss
+                    if i > cfg.second_stage_iter:
+                        loss += acc_loss
                     total_acc_loss += acc_loss.item()
                 prev_prev_v = prev_v
                 prev_v = v.detach().clone()

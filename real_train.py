@@ -24,7 +24,7 @@ set_all_seeds(seed)
 def demo_real():
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/rope_double_hand_clamp_more_control_smooth_a_0.01"
+    base_dir = f"experiments/rope_double_hand_clamp_more_control_smooth_a_0.01_two_stage_50"
     cfg.spring_Y_min = 1e3
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = RealInvPhyTrainer(

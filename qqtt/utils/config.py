@@ -62,6 +62,8 @@ class RealConfig:
         self.spring_Y_min = 1e3
         self.spring_Y_max = 1e5
 
+        self.second_stage_iter = 50
+
         # Parameters on whether update the collision parameters
         self.collision_learn = True
 
