@@ -306,6 +306,8 @@ class RealInvPhyTrainer:
 
         # Render the initial visualization
         self.visualize_sim(save_only=False)
+        video_path = f"{cfg.base_dir}/test.mp4"
+        self.visualize_sim(save_only=True, video_path=video_path)
         import pdb
 
         pdb.set_trace()
