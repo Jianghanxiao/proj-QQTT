@@ -1,4 +1,4 @@
-from qqtt import RealInvPhyTrainer
+from qqtt import RealInvPhyTrainerWarp
 from qqtt.utils import logger, cfg
 from datetime import datetime
 
@@ -24,18 +24,19 @@ set_all_seeds(seed)
 def demo_real():
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/debug_rope_double_hand_clamp_more_control_smooth_a_0.01_two_stage_50"
-    cfg.spring_Y_min = 1e3
+    base_dir = f"experiments/debug_warp_rope"
+    cfg.spring_Y_min = 0
+    # cfg.init_spring_Y = 1e3
     logger.set_log_file(path=base_dir, name="inv_phy_log")
-    trainer = RealInvPhyTrainer(
+    trainer = RealInvPhyTrainerWarp(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect/rope_double_hand/final_data.pkl",
         base_dir=base_dir,
     )
-    # trainer.train()
+    trainer.train()
     # trainer.resume_train(
     #     model_path="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/rope_double_hand_clamp_more_control_smooth_a/train/iter_40.pth"
     # )
-    trainer.test("/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/rope_double_hand_clamp_more_control_smooth_a_0.01_two_stage_50/train/iter_240.pth")
+    # trainer.test("/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/debug_warp/train/iter_0.pth")
 
 
 if __name__ == "__main__":

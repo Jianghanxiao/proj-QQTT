@@ -1,9 +1,11 @@
 # proj-QQTT
 
 ```
-conda create -n qqtt python=3.8
+conda create -n qqtt python=3.10
 conda activate qqtt
-pip install --upgrade taichi
+<!-- pip install --upgrade taichi -->
+pip install warp-lang
+pip install usd-core matplotlib pyglet
 pip install open3d
 ```
 
@@ -22,12 +24,13 @@ pip install cma
 conda install -c iopath iopath
 conda install pytorch3d -c pytorch3d
 pip install trimesh
-pip install "pyglet<2"
+<!-- pip install "pyglet<2" -->
 pip install rtree
 ```
 
 The env for cameras:
 ```
+pip install Cython
 pip install pyrealsense
 pip install atomics
 pip install pynput

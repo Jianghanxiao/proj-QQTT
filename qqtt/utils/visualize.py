@@ -37,7 +37,11 @@ def visualize_pc_real(
             [
                 object_colors,
                 np.zeros(
-                    (object_colors.shape[0], object_points.shape[1] - object_colors.shape[1], 3)
+                    (
+                        object_colors.shape[0],
+                        object_points.shape[1] - object_colors.shape[1],
+                        3,
+                    )
                 ),
             ],
             axis=1,
@@ -68,15 +72,15 @@ def visualize_pc_real(
     prev_center = []
     for i in range(object_points.shape[0]):
         object_pcd = o3d.geometry.PointCloud()
-        if object_motions_valid is None:
+        if object_visibilities is None:
             object_pcd.points = o3d.utility.Vector3dVector(object_points[i])
             object_pcd.colors = o3d.utility.Vector3dVector(object_colors[i])
         else:
             object_pcd.points = o3d.utility.Vector3dVector(
-                object_points[i, np.where(object_motions_valid[i])[0], :]
+                object_points[i, np.where(object_visibilities[i])[0], :]
             )
             object_pcd.colors = o3d.utility.Vector3dVector(
-                object_colors[i, np.where(object_motions_valid[i])[0], :]
+                object_colors[i, np.where(object_visibilities[i])[0], :]
             )
         if i == 0:
             render_object_pcd = object_pcd
