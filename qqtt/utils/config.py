@@ -67,6 +67,9 @@ class RealConfig:
         # Parameters on whether update the collision parameters
         self.collision_learn = True
 
+        # DEBUG mode: set use_graph to False
+        self.use_graph = True
+
     def to_dict(self):
         # Convert the class to dictionary
         return {

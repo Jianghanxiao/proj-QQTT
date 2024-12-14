@@ -1,3 +1,2 @@
-from .trainer import InvPhyTrainer
-from .cma_collision import InvPhyTrainerCMA
-from .real_trainer import RealInvPhyTrainer
+# from .cma_collision import InvPhyTrainerCMA
+from .real_trainer_warp import RealInvPhyTrainerWarp

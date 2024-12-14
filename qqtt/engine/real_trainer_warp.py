@@ -1,17 +1,16 @@
 from qqtt.data import RealData
 from qqtt.utils import logger, visualize_pc_real, cfg
-from qqtt import SpringMassSystem
+from qqtt.model.diff_simulator import SpringMassSystemWarp
 import open3d as o3d
 import numpy as np
 import torch
-from fvcore.nn import smooth_l1_loss
 import wandb
 import os
-from pytorch3d.loss import chamfer_distance
 from tqdm import tqdm
+import warp as wp
 
 
-class RealInvPhyTrainer:
+class RealInvPhyTrainerWarp:
     def __init__(
         self, data_path, base_dir, mask_path=None, velocity_path=None, device="cuda:0"
     ):
@@ -49,8 +48,7 @@ class RealInvPhyTrainer:
             mask=self.init_masks,
         )
 
-        # Initialize the physical simulator
-        self.simulator = SpringMassSystem(
+        self.simulator = SpringMassSystemWarp(
             self.init_vertices,
             self.init_springs,
             self.init_rest_lengths,
@@ -58,24 +56,30 @@ class RealInvPhyTrainer:
             dt=cfg.dt,
             num_substeps=cfg.num_substeps,
             spring_Y=cfg.init_spring_Y,
-            collide_elas=cfg.init_collide_elas,
-            collide_fric=cfg.init_collide_fric,
+            # collide_elas=cfg.init_collide_elas,
+            # collide_fric=cfg.init_collide_fric,
             dashpot_damping=cfg.dashpot_damping,
             drag_damping=cfg.drag_damping,
-            collide_object_elas=cfg.collide_object_elas,
-            collide_object_fric=cfg.collide_object_fric,
-            init_masks=self.init_masks,
+            # collide_object_elas=cfg.collide_object_elas,
+            # collide_object_fric=cfg.collide_object_fric,
+            # init_masks=self.init_masks,
             init_velocities=self.init_velocities,
             num_object_points=self.num_all_points,
+            num_surface_points=self.num_surface_points,
+            num_original_points=self.num_original_points,
             controller_points=self.controller_points,
             reverse_z=True,
             spring_Y_min=cfg.spring_Y_min,
             spring_Y_max=cfg.spring_Y_max,
+            gt_object_points=self.object_points,
+            gt_object_visibilities=self.object_visibilities,
+            gt_object_motions_valid=self.object_motions_valid,
         )
 
         self.optimizer = torch.optim.Adam(
-            self.simulator.parameters(), lr=cfg.base_lr, betas=(0.9, 0.99)
+            [wp.to_torch(self.simulator.wp_spring_Y)], lr=cfg.base_lr, betas=(0.9, 0.99)
         )
+
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
@@ -163,62 +167,64 @@ class RealInvPhyTrainer:
         best_epoch = None
         # Train the model with the physical simulator
         for i in range(start_epoch + 1, cfg.iterations):
-            self.simulator.reset_system(
-                self.init_vertices.clone(),
-                self.init_springs.clone(),
-                self.init_rest_lengths.clone(),
-                self.init_masses.clone(),
-                initial_velocities=(
-                    self.init_velocities.clone()
-                    if self.init_velocities is not None
-                    else None
-                ),
-            )
             total_loss = 0.0
             total_chamfer_loss = 0.0
             total_track_loss = 0.0
-            total_acc_loss = 0.0
-            prev_v = torch.zeros_like(self.init_vertices)
-            prev_prev_v = None
-            for j in tqdm(range(1, self.dataset.frame_len)):
-                self.simulator.set_controller(j)
-                x, v, _, _, _ = self.simulator.step()
-                loss, chamfer_loss, track_loss = self.compute_loss(j, x)
-                if prev_v is not None and prev_prev_v is not None:
-                    acc_loss = 0.01 * smooth_l1_loss(
-                        v - prev_v, prev_v - prev_prev_v, beta=1.0, reduction="mean"
+            self.simulator.set_init_state(
+                self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
+            )
+            with wp.ScopedTimer("backward"):
+                for j in tqdm(range(1, self.dataset.frame_len)):
+                    self.simulator.set_controller_target(j)
+
+                    if cfg.use_graph:
+                        wp.capture_launch(self.simulator.graph)
+                    else:
+                        with self.simulator.tape:
+                            self.simulator.step()
+                            self.simulator.calculate_loss()
+                        self.simulator.tape.backward(self.simulator.loss)
+
+                    self.optimizer.step()
+
+                    chamfer_loss = wp.to_torch(
+                        self.simulator.chamfer_loss, requires_grad=False
                     )
-                    if i > cfg.second_stage_iter:
-                        loss += acc_loss
-                    total_acc_loss += acc_loss.item()
-                prev_prev_v = prev_v
-                prev_v = v.detach().clone()
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-                self.simulator.detach()
-                total_loss += loss.item()
-                total_chamfer_loss += chamfer_loss.item()
-                total_track_loss += track_loss.item()
-                # if torch.isnan(self.simulator.spring_Y.grad).sum() > 0:
-                #     print(torch.isnan(self.simulator.spring_Y.grad).sum())
-                #     print("Nan detected for spring_Y")
-                #     import pdb
-                #     pdb.set_trace()
+                    track_loss = wp.to_torch(
+                        self.simulator.track_loss, requires_grad=False
+                    )
+                    loss = wp.to_torch(self.simulator.loss, requires_grad=False)
+                    total_loss += loss.item()
+                    total_chamfer_loss += chamfer_loss.item()
+                    total_track_loss += track_loss.item()
+
+                    if cfg.use_graph:
+                        # Only need to clear the gradient, the tape is created in the graph
+                        self.simulator.tape.zero()
+                    else:
+                        # Need to reset the compute graph and clear the gradient
+                        self.simulator.tape.reset()
+                    self.simulator.clear_loss()
+                    # Set the intial state for the next step
+                    self.simulator.set_init_state(
+                        self.simulator.wp_states[-1].wp_x,
+                        self.simulator.wp_states[-1].wp_v,
+                    )
+
             total_loss /= self.dataset.frame_len - 1
             total_chamfer_loss /= self.dataset.frame_len - 1
             total_track_loss /= self.dataset.frame_len - 1
-            total_acc_loss /= self.dataset.frame_len - 2
+            # total_acc_loss /= self.dataset.frame_len - 2
             wandb.log(
                 {
                     "loss": total_loss,
                     "chamfer_loss": total_chamfer_loss,
                     "track_loss": total_track_loss,
-                    "acc_loss": total_acc_loss,
-                    "collide_else": self.simulator.collide_elas.item(),
-                    "collide_fric": self.simulator.collide_fric.item(),
-                    "collide_object_elas": self.simulator.collide_object_elas.item(),
-                    "collide_object_fric": self.simulator.collide_object_fric.item(),
+                    # "acc_loss": total_acc_loss,
+                    # "collide_else": self.simulator.collide_elas.item(),
+                    # "collide_fric": self.simulator.collide_fric.item(),
+                    # "collide_object_elas": self.simulator.collide_object_elas.item(),
+                    # "collide_object_fric": self.simulator.collide_object_fric.item(),
                 },
                 step=i,
             )
@@ -238,9 +244,12 @@ class RealInvPhyTrainer:
                     },
                     step=i,
                 )
+                # TODO: Save other parameters
                 cur_model = {
                     "epoch": i,
-                    "model_state_dict": self.simulator.state_dict(),
+                    "spring_Y": wp.to_torch(
+                        self.simulator.wp_spring_Y, requires_grad=False
+                    ),
                     "optimizer_state_dict": self.optimizer.state_dict(),
                 }
                 if best_loss == None or total_loss < best_loss:
@@ -270,100 +279,50 @@ class RealInvPhyTrainer:
 
         wandb.finish()
 
-    def compute_loss(self, frame_idx, x):
-        current_object_points = self.object_points[frame_idx]
-        current_object_visibilities = self.object_visibilities[frame_idx]
-        # The motion valid indicates if the tracking is valid from prev_frame
-        current_object_motions_valid = self.object_motions_valid[frame_idx - 1]
-
-        # Compute the single-direction chamfer loss for the object points
-        chamfer_object_points = current_object_points[current_object_visibilities]
-        chamfer_x = x[: self.num_surface_points]
-        # The GT chamfer_object_points can be partial,first find the nearest in second
-        chamfer_loss = chamfer_distance(
-            chamfer_object_points.unsqueeze(0),
-            chamfer_x.unsqueeze(0),
-            single_directional=True,
-        )[0]
-
-        # Compute the tracking loss for the object points
-        gt_track_points = current_object_points[current_object_motions_valid]
-        pred_x = x[: self.num_original_points][current_object_motions_valid]
-        track_loss = smooth_l1_loss(pred_x, gt_track_points, beta=1.0, reduction="mean")
-
-        return (
-            cfg.chamfer_weight * chamfer_loss + cfg.track_weight * track_loss,
-            chamfer_loss,
-            track_loss,
-        )
-
-    def test(self, model_path):
-        # Load the model
-        logger.info(f"Load model from {model_path}")
-        checkpoint = torch.load(model_path, map_location=cfg.device)
-        self.simulator.load_state_dict(checkpoint["model_state_dict"])
-        self.simulator.to(cfg.device)
-
-        # Render the initial visualization
-        self.visualize_sim(save_only=False)
-        video_path = f"{cfg.base_dir}/test.mp4"
-        self.visualize_sim(save_only=True, video_path=video_path)
-        import pdb
-
-        pdb.set_trace()
-
-    def resume_train(self, model_path):
-        # Load the model
-        checkpoint = torch.load(model_path, map_location=cfg.device)
-        epoch = checkpoint["epoch"]
-        logger.info(f"Continue training with model from {model_path} at epoch {epoch}")
-        self.simulator.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        self.simulator.to(cfg.device)
-
-        self.train(epoch)
-
     def visualize_sim(
         self, save_only=True, video_path=None, springs=None, spring_params=None
     ):
         logger.info("Visualizing the simulation")
         # Visualize the whole simulation using current set of parameters in the physical simulator
-        with torch.no_grad():
-            # Need to reset the simulator to the initial state
-            self.simulator.reset_system(
-                self.init_vertices.clone(),
-                self.init_springs.clone(),
-                self.init_rest_lengths.clone(),
-                self.init_masses.clone(),
-                initial_velocities=(
-                    self.init_velocities.clone()
-                    if self.init_velocities is not None
-                    else None
-                ),
-            )
-            vertices = [self.init_vertices.cpu()]
+        frame_len = self.dataset.frame_len
+        self.simulator.set_init_state(
+            self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
+        )
+        vertices = [
+            wp.to_torch(self.simulator.wp_states[0].wp_x, requires_grad=False).cpu()
+        ]
 
-            frame_len = self.dataset.frame_len
+        with wp.ScopedTimer("simulate"):
             for i in tqdm(range(1, frame_len)):
-                self.simulator.set_controller(i)
-                x, _, _, _, _ = self.simulator.step()
+                self.simulator.set_controller_target(i)
+                if cfg.use_graph:
+                    wp.capture_launch(self.simulator.forward_graph)
+                else:
+                    self.simulator.step()
+                x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
                 vertices.append(x.cpu())
+                # Set the intial state for the next step
+                self.simulator.set_init_state(
+                    self.simulator.wp_states[-1].wp_x,
+                    self.simulator.wp_states[-1].wp_v,
+                )
 
-            vertices = torch.stack(vertices, dim=0)
-            if not save_only:
-                visualize_pc_real(
-                    vertices[: self.num_all_points],
-                    self.object_colors,
-                    self.controller_points,
-                    visualize=True,
-                )
-            else:
-                assert video_path is not None, "Please provide the video path to save"
-                visualize_pc_real(
-                    vertices[:, : self.num_all_points, :],
-                    self.object_colors,
-                    self.controller_points,
-                    visualize=False,
-                    save_video=True,
-                    save_path=video_path,
-                )
+        vertices = torch.stack(vertices, dim=0)
+
+        if not save_only:
+            visualize_pc_real(
+                vertices[:, : self.num_all_points, :],
+                self.object_colors,
+                self.controller_points,
+                visualize=True,
+            )
+        else:
+            assert video_path is not None, "Please provide the video path to save"
+            visualize_pc_real(
+                vertices[:, : self.num_all_points, :],
+                self.object_colors,
+                self.controller_points,
+                visualize=False,
+                save_video=True,
+                save_path=video_path,
+            )

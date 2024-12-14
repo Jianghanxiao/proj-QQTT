@@ -1,2 +1,2 @@
-from .model import SpringMassSystem
-from .engine import InvPhyTrainer, InvPhyTrainerCMA, RealInvPhyTrainer
+from .model import SpringMassSystemWarp
+from .engine import RealInvPhyTrainerWarp
