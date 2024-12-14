@@ -42,12 +42,12 @@ class RealConfig:
         self.FPS = 30
         self.dt = 5e-5
         self.num_substeps = round(1.0 / self.FPS / self.dt)
-        self.dashpot_damping = 100
         self.drag_damping = 3
         self.base_lr = 1e-3
         self.iterations = 500
         self.vis_interval = 10
         self.init_spring_Y = 3e3
+        self.init_spring_damping = 100.0
         self.init_collide_elas = 0.5
         self.init_collide_fric = 0.3
         self.collide_object_elas = 0.7

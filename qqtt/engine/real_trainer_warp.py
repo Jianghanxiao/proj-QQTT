@@ -58,7 +58,7 @@ class RealInvPhyTrainerWarp:
             spring_Y=cfg.init_spring_Y,
             # collide_elas=cfg.init_collide_elas,
             # collide_fric=cfg.init_collide_fric,
-            dashpot_damping=cfg.dashpot_damping,
+            spring_damping=cfg.init_spring_damping,
             drag_damping=cfg.drag_damping,
             # collide_object_elas=cfg.collide_object_elas,
             # collide_object_fric=cfg.collide_object_fric,
@@ -77,7 +77,12 @@ class RealInvPhyTrainerWarp:
         )
 
         self.optimizer = torch.optim.Adam(
-            [wp.to_torch(self.simulator.wp_spring_Y)], lr=cfg.base_lr, betas=(0.9, 0.99)
+            [
+                wp.to_torch(self.simulator.wp_spring_Y),
+                wp.to_torch(self.simulator.wp_spring_damping),
+            ],
+            lr=cfg.base_lr,
+            betas=(0.9, 0.99),
         )
 
         if "debug" not in cfg.run_name:
@@ -159,9 +164,9 @@ class RealInvPhyTrainerWarp:
             )
 
     def train(self, start_epoch=-1):
-        # Render the initial visualization
-        video_path = f"{cfg.base_dir}/train/init.mp4"
-        self.visualize_sim(save_only=True, video_path=video_path)
+        # # Render the initial visualization
+        # video_path = f"{cfg.base_dir}/train/init.mp4"
+        # self.visualize_sim(save_only=True, video_path=video_path)
 
         best_loss = None
         best_epoch = None
@@ -220,6 +225,7 @@ class RealInvPhyTrainerWarp:
                     "loss": total_loss,
                     "chamfer_loss": total_chamfer_loss,
                     "track_loss": total_track_loss,
+                    "spring_damping":torch.exp(wp.to_torch(self.simulator.wp_spring_damping)).mean(),
                     # "acc_loss": total_acc_loss,
                     # "collide_else": self.simulator.collide_elas.item(),
                     # "collide_fric": self.simulator.collide_fric.item(),
@@ -228,6 +234,7 @@ class RealInvPhyTrainerWarp:
                 },
                 step=i,
             )
+            print(f"spring_damping: {torch.exp(wp.to_torch(self.simulator.wp_spring_damping)).mean()}")
 
             logger.info(f"[Train]: Iteration: {i}, Loss: {total_loss}")
 
@@ -247,8 +254,13 @@ class RealInvPhyTrainerWarp:
                 # TODO: Save other parameters
                 cur_model = {
                     "epoch": i,
-                    "spring_Y": wp.to_torch(
-                        self.simulator.wp_spring_Y, requires_grad=False
+                    "spring_Y": torch.exp(
+                        wp.to_torch(self.simulator.wp_spring_Y, requires_grad=False)
+                    ),
+                    "spring_damping": torch.exp(
+                        wp.to_torch(
+                            self.simulator.wp_spring_damping, requires_grad=False
+                        )
                     ),
                     "optimizer_state_dict": self.optimizer.state_dict(),
                 }

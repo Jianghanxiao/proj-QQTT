@@ -81,7 +81,7 @@ def eval_springs(
     springs: wp.array(dtype=wp.vec2i),
     rest_lengths: wp.array(dtype=float),
     spring_Y: wp.array(dtype=float),
-    dashpot_damping: float,
+    spring_damping: wp.array(dtype=float),
     spring_Y_min: float,
     spring_Y_max: float,
     f: wp.array(dtype=wp.vec3),
@@ -120,9 +120,9 @@ def eval_springs(
         )
 
         v_rel = wp.dot(v2 - v1, d)
-        dashpot_forces = dashpot_damping * v_rel * d
+        damping_forces = wp.max(wp.exp(spring_damping[tid]), 0.0) * v_rel * d
 
-        overall_force = spring_force + dashpot_forces
+        overall_force = spring_force + damping_forces
 
         if idx1 < num_object_points:
             wp.atomic_add(f, idx1, overall_force)
@@ -277,7 +277,7 @@ class SpringMassSystemWarp:
         spring_Y,
         # collide_elas,
         # collide_fric,
-        dashpot_damping,
+        spring_damping,
         drag_damping,
         # collide_object_elas=0.7,
         # collide_object_fric=0.3,
@@ -318,7 +318,6 @@ class SpringMassSystemWarp:
 
         self.dt = dt
         self.num_substeps = num_substeps
-        self.dashpot_damping = dashpot_damping
         self.drag_damping = drag_damping
         self.reverse_factor = 1.0 if not reverse_z else -1.0
         self.spring_Y_min = spring_Y_min
@@ -390,6 +389,14 @@ class SpringMassSystemWarp:
             * torch.ones(self.n_springs, dtype=torch.float32, device=self.device),
             requires_grad=True,
         )
+        self.wp_spring_damping = wp.from_torch(
+            torch.log(
+                torch.tensor(spring_damping, dtype=torch.float32, device=self.device)
+            )
+            * torch.ones(self.n_springs, dtype=torch.float32, device=self.device),
+            requires_grad=True,
+        )
+
         self.distance_matrix = wp.zeros(
             (self.num_original_points, self.num_surface_points), requires_grad=False
         )
@@ -503,7 +510,7 @@ class SpringMassSystemWarp:
                     self.wp_springs,
                     self.wp_rest_lengths,
                     self.wp_spring_Y,
-                    self.dashpot_damping,
+                    self.wp_spring_damping,
                     self.spring_Y_min,
                     self.spring_Y_max,
                 ],
