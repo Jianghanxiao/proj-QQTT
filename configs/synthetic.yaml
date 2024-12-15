@@ -1,0 +1,17 @@
+data_type: "syn"
+FPS: 10
+dt: 5e-5
+num_substeps: 100
+dashpot_damping: 100
+drag_damping: 3
+base_lr: 1e-3
+iterations: 200
+vis_interval: 10
+init_spring_Y: 3e3
+init_collide_elas: 0.5
+init_collide_fric: 0.3
+collide_object_elas: 0.7
+collide_object_fric: 0.3
+radius: 0.1
+max_neighbours: 20
+collision_learn: true
