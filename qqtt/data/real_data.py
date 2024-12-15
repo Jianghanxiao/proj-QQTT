@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import pickle
-from qqtt.utils import logger, visualize_pc_real, cfg
+from qqtt.utils import logger, visualize_pc, cfg
 import matplotlib.pyplot as plt
 
 
@@ -75,7 +75,7 @@ class RealData:
 
     def visualize_data(self, visualize=False):
         if visualize:
-            visualize_pc_real(
+            visualize_pc(
                 self.object_points,
                 self.object_colors,
                 self.controller_points,
@@ -83,7 +83,7 @@ class RealData:
                 self.object_motions_valid,
                 visualize=True,
             )
-        visualize_pc_real(
+        visualize_pc(
             self.object_points,
             self.object_colors,
             self.controller_points,

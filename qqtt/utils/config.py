@@ -5,7 +5,7 @@ import yaml
 @singleton
 class Config:
     def __init__(self):
-        self.data_type = None
+        self.data_type = "real"
         self.FPS = 30
         self.dt = 5e-5
         self.num_substeps = round(1.0 / self.FPS / self.dt)
@@ -26,6 +26,12 @@ class Config:
 
         self.spring_Y_min = 0
         self.spring_Y_max = 1e5
+
+        self.reverse_z = True
+        self.visualize_ground = False
+        self.vp_front = [1, 0, -2]
+        self.vp_up = [0, 0, -1]
+        self.vp_zoom = 1
 
         # Parameters on whether update the collision parameters
         self.collision_learn = True

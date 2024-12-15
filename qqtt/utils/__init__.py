@@ -1,3 +1,3 @@
 from .logger import logger
-from .visualize import visualize_pc, visualize_pc_real
+from .visualize import visualize_pc
 from .config import cfg

@@ -1,5 +1,5 @@
-from qqtt.data import RealData
-from qqtt.utils import logger, visualize_pc_real, cfg
+from qqtt.data import RealData, SimpleData
+from qqtt.utils import logger, visualize_pc, cfg
 from qqtt.model.diff_simulator import SpringMassSystemWarp
 import open3d as o3d
 import numpy as np
@@ -10,7 +10,7 @@ from tqdm import tqdm
 import warp as wp
 
 
-class RealInvPhyTrainerWarp:
+class InvPhyTrainerWarp:
     def __init__(
         self, data_path, base_dir, mask_path=None, velocity_path=None, device="cuda:0"
     ):
@@ -19,22 +19,40 @@ class RealInvPhyTrainerWarp:
         cfg.device = device
         cfg.run_name = base_dir.split("/")[-1]
         # Load the data
-        self.dataset = RealData(visualize=False)
+        if cfg.data_type == "real":
+            self.dataset = RealData(visualize=False)
+            # Get the object points and controller points
+            self.object_points = self.dataset.object_points
+            self.object_colors = self.dataset.object_colors
+            self.object_visibilities = self.dataset.object_visibilities
+            self.object_motions_valid = self.dataset.object_motions_valid
+            self.controller_points = self.dataset.controller_points
+            self.structure_points = self.dataset.structure_points
+            self.num_original_points = self.dataset.num_original_points
+            self.num_surface_points = self.dataset.num_surface_points
+            self.num_all_points = self.dataset.num_all_points
+        elif cfg.data_type == "synthetic":
+            self.dataset = SimpleData(visualize=False)
+            self.object_points = self.dataset.data
+            self.object_colors = None
+            self.object_visibilities = None
+            self.object_motions_valid = None
+            self.controller_points = None
+            self.structure_points = self.dataset.data[0]
+            self.num_original_points = None
+            self.num_surface_points = None
+            self.num_all_points = len(self.dataset.data[0])
+        else:
+            raise ValueError(f"Data type {cfg.data_type} not supported")
+
         self.init_masks = None
         self.init_velocities = None
 
-        # Get the object points and controller points
-        self.object_points = self.dataset.object_points
-        self.object_colors = self.dataset.object_colors
-        self.object_visibilities = self.dataset.object_visibilities
-        self.object_motions_valid = self.dataset.object_motions_valid
-        self.controller_points = self.dataset.controller_points
-        self.structure_points = self.dataset.structure_points
-        self.num_original_points = self.dataset.num_original_points
-        self.num_surface_points = self.dataset.num_surface_points
-        self.num_all_points = self.dataset.num_all_points
-
         # Initialize the vertices, springs, rest lengths and masses
+        if self.controller_points is None:
+            firt_frame_controller_points = None
+        else:
+            firt_frame_controller_points = self.controller_points[0]
         (
             self.init_vertices,
             self.init_springs,
@@ -42,7 +60,7 @@ class RealInvPhyTrainerWarp:
             self.init_masses,
         ) = self._init_start(
             self.structure_points,
-            self.controller_points[0],
+            firt_frame_controller_points,
             radius=cfg.radius,
             max_neighbours=cfg.max_neighbours,
             mask=self.init_masks,
@@ -56,8 +74,8 @@ class RealInvPhyTrainerWarp:
             dt=cfg.dt,
             num_substeps=cfg.num_substeps,
             spring_Y=cfg.init_spring_Y,
-            # collide_elas=cfg.init_collide_elas,
-            # collide_fric=cfg.init_collide_fric,
+            collide_elas=cfg.init_collide_elas,
+            collide_fric=cfg.init_collide_fric,
             dashpot_damping=cfg.dashpot_damping,
             drag_damping=cfg.drag_damping,
             # collide_object_elas=cfg.collide_object_elas,
@@ -68,7 +86,7 @@ class RealInvPhyTrainerWarp:
             num_surface_points=self.num_surface_points,
             num_original_points=self.num_original_points,
             controller_points=self.controller_points,
-            reverse_z=True,
+            reverse_z=cfg.reverse_z,
             spring_Y_min=cfg.spring_Y_min,
             spring_Y_max=cfg.spring_Y_max,
             gt_object_points=self.object_points,
@@ -77,13 +95,19 @@ class RealInvPhyTrainerWarp:
         )
 
         self.optimizer = torch.optim.Adam(
-            [wp.to_torch(self.simulator.wp_spring_Y)], lr=cfg.base_lr, betas=(0.9, 0.99)
+            [
+                wp.to_torch(self.simulator.wp_spring_Y),
+                wp.to_torch(self.simulator.wp_collide_elas),
+                wp.to_torch(self.simulator.wp_collide_fric),
+            ],
+            lr=cfg.base_lr,
+            betas=(0.9, 0.99),
         )
 
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
-                project="real_data",
+                project="deprecated-InvPhys_twoK",
                 name=cfg.run_name,
                 config=cfg.to_dict(),
             )
@@ -107,7 +131,8 @@ class RealInvPhyTrainerWarp:
         mask=None,
     ):
         object_points = object_points.cpu().numpy()
-        controller_points = controller_points.cpu().numpy()
+        if controller_points is not None:
+            controller_points = controller_points.cpu().numpy()
         if mask is None:
             object_pcd = o3d.geometry.PointCloud()
             object_pcd.points = o3d.utility.Vector3dVector(object_points)
@@ -135,18 +160,19 @@ class RealInvPhyTrainerWarp:
                         springs.append([i, j])
                         rest_lengths.append(np.linalg.norm(points[i] - points[j]))
 
-            # Connec the springs between the controller points and the object points
-            num_object_points = len(points)
-            points = np.concatenate([points, controller_points], axis=0)
-            for i in range(len(controller_points)):
-                [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
-                    controller_points[i], radius * 2, max_neighbours * 4
-                )
-                for j in idx:
-                    springs.append([num_object_points + i, j])
-                    rest_lengths.append(
-                        np.linalg.norm(controller_points[i] - points[j])
+            if controller_points is not None:
+                # Connect the springs between the controller points and the object points
+                num_object_points = len(points)
+                points = np.concatenate([points, controller_points], axis=0)
+                for i in range(len(controller_points)):
+                    [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
+                        controller_points[i], radius * 2, max_neighbours * 4
                     )
+                    for j in idx:
+                        springs.append([num_object_points + i, j])
+                        rest_lengths.append(
+                            np.linalg.norm(controller_points[i] - points[j])
+                        )
 
             springs = np.array(springs)
             rest_lengths = np.array(rest_lengths)
@@ -168,13 +194,15 @@ class RealInvPhyTrainerWarp:
         # Train the model with the physical simulator
         for i in range(start_epoch + 1, cfg.iterations):
             total_loss = 0.0
-            total_chamfer_loss = 0.0
-            total_track_loss = 0.0
-            total_acc_loss = 0.0
+            if cfg.data_type == "real":
+                total_chamfer_loss = 0.0
+                total_track_loss = 0.0
+                total_acc_loss = 0.0
             self.simulator.set_init_state(
                 self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
             )
-            self.simulator.set_acc_count(False)
+            if cfg.data_type == "real":
+                self.simulator.set_acc_count(False)
             with wp.ScopedTimer("backward"):
                 for j in tqdm(range(1, self.dataset.frame_len)):
                     self.simulator.set_controller_target(j)
@@ -182,37 +210,47 @@ class RealInvPhyTrainerWarp:
                     if cfg.use_graph:
                         wp.capture_launch(self.simulator.graph)
                     else:
-                        with self.simulator.tape:
-                            self.simulator.step()
-                            self.simulator.calculate_loss()
-                        self.simulator.tape.backward(self.simulator.loss)
+                        if cfg.data_type == "real":
+                            with self.simulator.tape:
+                                self.simulator.step()
+                                self.simulator.calculate_loss()
+                            self.simulator.tape.backward(self.simulator.loss)
+                        else:
+                            with self.simulator.tape:
+                                self.simulator.step()
+                                self.simulator.calculate_simple_loss()
+                            self.simulator.tape.backward(self.simulator.loss)
 
                     self.optimizer.step()
 
-                    chamfer_loss = wp.to_torch(
-                        self.simulator.chamfer_loss, requires_grad=False
-                    )
-                    track_loss = wp.to_torch(
-                        self.simulator.track_loss, requires_grad=False
-                    )
+                    if cfg.data_type == "real":
+                        chamfer_loss = wp.to_torch(
+                            self.simulator.chamfer_loss, requires_grad=False
+                        )
+                        track_loss = wp.to_torch(
+                            self.simulator.track_loss, requires_grad=False
+                        )
+                        total_chamfer_loss += chamfer_loss.item()
+                        total_track_loss += track_loss.item()
+
+                        if (
+                            wp.to_torch(self.simulator.acc_count, requires_grad=False)[
+                                0
+                            ]
+                            == 1
+                        ):
+                            acc_loss = wp.to_torch(
+                                self.simulator.acc_loss, requires_grad=False
+                            )
+                            total_acc_loss += acc_loss.item()
+                        else:
+                            self.simulator.set_acc_count(True)
+
+                        # Update the prev_acc used to calculate the acceleration loss
+                        self.simulator.update_acc()
+
                     loss = wp.to_torch(self.simulator.loss, requires_grad=False)
                     total_loss += loss.item()
-                    total_chamfer_loss += chamfer_loss.item()
-                    total_track_loss += track_loss.item()
-
-                    if (
-                        wp.to_torch(self.simulator.acc_count, requires_grad=False)[0]
-                        == 1
-                    ):
-                        acc_loss = wp.to_torch(
-                            self.simulator.acc_loss, requires_grad=False
-                        )
-                        total_acc_loss += acc_loss.item()
-                    else:
-                        self.simulator.set_acc_count(True)
-
-                    # Update the prev_acc used to calculate the acceleration loss
-                    self.simulator.update_acc()
 
                     if cfg.use_graph:
                         # Only need to clear the gradient, the tape is created in the graph
@@ -228,17 +266,24 @@ class RealInvPhyTrainerWarp:
                     )
 
             total_loss /= self.dataset.frame_len - 1
-            total_chamfer_loss /= self.dataset.frame_len - 1
-            total_track_loss /= self.dataset.frame_len - 1
-            total_acc_loss /= self.dataset.frame_len - 2
+            if cfg.data_type == "real":
+                total_chamfer_loss /= self.dataset.frame_len - 1
+                total_track_loss /= self.dataset.frame_len - 1
+                total_acc_loss /= self.dataset.frame_len - 2
             wandb.log(
                 {
                     "loss": total_loss,
-                    "chamfer_loss": total_chamfer_loss,
-                    "track_loss": total_track_loss,
-                    "acc_loss": total_acc_loss,
-                    # "collide_else": self.simulator.collide_elas.item(),
-                    # "collide_fric": self.simulator.collide_fric.item(),
+                    "chamfer_loss": (
+                        total_chamfer_loss if cfg.data_type == "real" else 0
+                    ),
+                    "track_loss": total_track_loss if cfg.data_type == "real" else 0,
+                    "acc_loss": total_acc_loss if cfg.data_type == "real" else 0,
+                    "collide_else": wp.to_torch(
+                        self.simulator.wp_collide_elas, requires_grad=False
+                    ).item(),
+                    "collide_fric": wp.to_torch(
+                        self.simulator.wp_collide_fric, requires_grad=False
+                    ).item(),
                     # "collide_object_elas": self.simulator.collide_object_elas.item(),
                     # "collide_object_fric": self.simulator.collide_object_fric.item(),
                 },
@@ -260,11 +305,17 @@ class RealInvPhyTrainerWarp:
                     },
                     step=i,
                 )
-                # TODO: Save other parameters
+                # Save the parameters
                 cur_model = {
                     "epoch": i,
                     "spring_Y": torch.exp(
                         wp.to_torch(self.simulator.wp_spring_Y, requires_grad=False)
+                    ),
+                    "collide_elas": wp.to_torch(
+                        self.simulator.wp_collide_elas, requires_grad=False
+                    ),
+                    "collide_fric": wp.to_torch(
+                        self.simulator.wp_collide_fric, requires_grad=False
                     ),
                     "optimizer_state_dict": self.optimizer.state_dict(),
                 }
@@ -295,9 +346,7 @@ class RealInvPhyTrainerWarp:
 
         wandb.finish()
 
-    def visualize_sim(
-        self, save_only=True, video_path=None, springs=None, spring_params=None
-    ):
+    def visualize_sim(self, save_only=True, video_path=None):
         logger.info("Visualizing the simulation")
         # Visualize the whole simulation using current set of parameters in the physical simulator
         frame_len = self.dataset.frame_len
@@ -310,7 +359,8 @@ class RealInvPhyTrainerWarp:
 
         with wp.ScopedTimer("simulate"):
             for i in tqdm(range(1, frame_len)):
-                self.simulator.set_controller_target(i)
+                if cfg.data_type == "real":
+                    self.simulator.set_controller_target(i)
                 if cfg.use_graph:
                     wp.capture_launch(self.simulator.forward_graph)
                 else:
@@ -326,7 +376,7 @@ class RealInvPhyTrainerWarp:
         vertices = torch.stack(vertices, dim=0)
 
         if not save_only:
-            visualize_pc_real(
+            visualize_pc(
                 vertices[:, : self.num_all_points, :],
                 self.object_colors,
                 self.controller_points,
@@ -334,7 +384,7 @@ class RealInvPhyTrainerWarp:
             )
         else:
             assert video_path is not None, "Please provide the video path to save"
-            visualize_pc_real(
+            visualize_pc(
                 vertices[:, : self.num_all_points, :],
                 self.object_colors,
                 self.controller_points,

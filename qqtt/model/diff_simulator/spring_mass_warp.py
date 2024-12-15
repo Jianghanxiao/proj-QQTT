@@ -14,6 +14,7 @@ if not cfg.use_graph:
 class State:
     def __init__(self, wp_init_vertices, num_control_points):
         self.wp_x = wp.zeros_like(wp_init_vertices, requires_grad=True)
+        self.wp_v_before_ground = wp.zeros_like(wp_init_vertices, requires_grad=True)
         self.wp_v = wp.zeros_like(self.wp_x, requires_grad=True)
         self.wp_vertice_forces = wp.zeros_like(self.wp_x, requires_grad=True)
         # No need to compute the gradient for the control points
@@ -25,13 +26,15 @@ class State:
     def clear_forces(self):
         self.wp_vertice_forces.zero_()
 
-    def clear_control(self):
-        self.wp_control_x.zero_()
-        self.wp_control_v.zero_()
+    # This takes more time but not necessary, will be overwritten directly
+    # def clear_control(self):
+    #     self.wp_control_x.zero_()
+    #     self.wp_control_v.zero_()
 
-    def clear_states(self):
-        self.wp_x.zero_()
-        self.wp_v.zero_()
+    # def clear_states(self):
+    #     self.wp_x.zero_()
+    #     self.wp_v_before_ground.zero_()
+    #     self.wp_v.zero_()
 
     @property
     def requires_grad(self):
@@ -129,13 +132,37 @@ def eval_springs(
 
 
 @wp.kernel
-def integrate_particles(
-    x: wp.array(dtype=wp.vec3),
+def update_vel_from_force(
     v: wp.array(dtype=wp.vec3),
     f: wp.array(dtype=wp.vec3),
     masses: wp.array(dtype=wp.float32),
     dt: float,
     drag_damping: float,
+    reverse_factor: float,
+    v_new: wp.array(dtype=wp.vec3),
+):
+    tid = wp.tid()
+
+    v0 = v[tid]
+    f0 = f[tid]
+    m0 = masses[tid]
+
+    drag_damping_factor = wp.exp(-dt * drag_damping)
+    all_force = f0 + m0 * wp.vec3(0.0, 0.0, -9.8) * reverse_factor
+    a = all_force / m0
+    v1 = v0 + a * dt
+    v2 = v1 * drag_damping_factor
+
+    v_new[tid] = v2
+
+
+@wp.kernel
+def integrate_ground_collision(
+    x: wp.array(dtype=wp.vec3),
+    v: wp.array(dtype=wp.vec3),
+    collide_elas: wp.array(dtype=float),
+    collide_fric: wp.array(dtype=float),
+    dt: float,
     reverse_factor: float,
     x_new: wp.array(dtype=wp.vec3),
     v_new: wp.array(dtype=wp.vec3),
@@ -144,21 +171,41 @@ def integrate_particles(
 
     x0 = x[tid]
     v0 = v[tid]
-    f0 = f[tid]
 
-    m0 = masses[tid]
+    normal = wp.vec3(0.0, 0.0, 1.0) * reverse_factor
 
-    # simple semi-implicit Euler. v1 = v0 + a dt, x1 = x0 + v1 dt
-    drag_damping_factor = wp.exp(-dt * drag_damping)
-    all_force = f0 + m0 * wp.vec3(0.0, 0.0, -9.8) * reverse_factor
-    a = all_force / m0
-    v1 = v0 + a * dt
-    v2 = v1 * drag_damping_factor
+    x_z = x0[2]
+    v_z = v0[2]
+    next_x_z = (x_z + v_z * dt) * reverse_factor
 
-    x1 = x0 + v2 * dt
+    if next_x_z < 0.0 and v_z * reverse_factor < -1e-4:
+        # Ground Collision
+        v_normal = wp.dot(v0, normal) * normal
+        v_tao = v0 - v_normal
+        v_normal_length = wp.length(v_normal)
+        v_tao_length = wp.max(wp.length(v_tao), 1e-6)
+        clamp_collide_elas = wp.clamp(collide_elas[0], low=0.0, high=1.0)
+        clamp_collide_fric = wp.clamp(collide_fric[0], low=0.0, high=2.0)
 
-    x_new[tid] = x1
-    v_new[tid] = v2
+        v_normal_new = -clamp_collide_elas * v_normal
+        a = wp.max(
+            0.0,
+            1.0
+            - clamp_collide_fric
+            * (1.0 + clamp_collide_elas)
+            * v_normal_length
+            / v_tao_length,
+        )
+        v_tao_new = a * v_tao
+
+        v1 = v_normal_new + v_tao_new
+        toi = -x_z / v_z
+    else:
+        v1 = v0
+        toi = 0.0
+
+    x_new[tid] = x0 + v0 * toi + v1 * (dt - toi)
+    v_new[tid] = v1
 
 
 @wp.kernel
@@ -331,6 +378,51 @@ def compute_final_loss(
     loss[0] = chamfer_loss[0] + track_loss[0] + acc_loss[0]
 
 
+@wp.kernel
+def compute_simple_loss(
+    pred: wp.array(dtype=wp.vec3),
+    gt: wp.array(dtype=wp.vec3),
+    num_object_points: int,
+    loss: wp.array(dtype=wp.float32),
+):
+    # Calculate the smooth l1 loss modifed from fvcore.nn.smooth_l1_loss
+    tid = wp.tid()
+    pred_x = pred[tid][0]
+    pred_y = pred[tid][1]
+    pred_z = pred[tid][2]
+
+    gt_x = gt[tid][0]
+    gt_y = gt[tid][1]
+    gt_z = gt[tid][2]
+
+    dist_x = wp.abs(pred_x - gt_x)
+    dist_y = wp.abs(pred_y - gt_y)
+    dist_z = wp.abs(pred_z - gt_z)
+
+    if dist_x < 1.0:
+        temp_simple_loss_x = 0.5 * (dist_x**2.0)
+    else:
+        temp_simple_loss_x = dist_x - 0.5
+
+    if dist_y < 1.0:
+        temp_simple_loss_y = 0.5 * (dist_y**2.0)
+    else:
+        temp_simple_loss_y = dist_y - 0.5
+
+    if dist_z < 1.0:
+        temp_simple_loss_z = 0.5 * (dist_z**2.0)
+    else:
+        temp_simple_loss_z = dist_z - 0.5
+
+    temp_simple_loss = temp_simple_loss_x + temp_simple_loss_y + temp_simple_loss_z
+
+    average_factor = float(num_object_points) * 3.0
+
+    final_simple_loss = temp_simple_loss / average_factor
+
+    wp.atomic_add(loss, 0, final_simple_loss)
+
+
 class SpringMassSystemWarp:
     def __init__(
         self,
@@ -341,8 +433,8 @@ class SpringMassSystemWarp:
         dt,
         num_substeps,
         spring_Y,
-        # collide_elas,
-        # collide_fric,
+        collide_elas,
+        collide_fric,
         dashpot_damping,
         drag_damping,
         # collide_object_elas=0.7,
@@ -393,10 +485,8 @@ class SpringMassSystemWarp:
         self.spring_Y_max = spring_Y_max
 
         if controller_points is None:
-            assert num_object_points is None
-            num_object_points = self.n_vertices
+            assert num_object_points == self.n_vertices
         else:
-            assert num_object_points is not None
             assert (controller_points.shape[1] + num_object_points) == self.n_vertices
         self.num_object_points = num_object_points
         self.num_control_points = (
@@ -406,11 +496,14 @@ class SpringMassSystemWarp:
 
         # Initialize the GT for calculating losses
         self.gt_object_points = gt_object_points
-        self.gt_object_visibilities = gt_object_visibilities.int()
-        self.gt_object_motions_valid = gt_object_motions_valid.int()
+        if cfg.data_type == "real":
+            self.gt_object_visibilities = gt_object_visibilities.int()
+            self.gt_object_motions_valid = gt_object_motions_valid.int()
 
         self.num_surface_points = num_surface_points
         self.num_original_points = num_original_points
+        if num_original_points is None:
+            self.num_original_points = self.num_object_points
 
         # # Do some initialization to initialize the warp cuda graph
         self.wp_springs = wp.from_torch(
@@ -422,31 +515,37 @@ class SpringMassSystemWarp:
         self.wp_masses = wp.from_torch(
             init_masses[:num_object_points], dtype=wp.float32, requires_grad=False
         )
-        self.prev_acc = wp.zeros_like(self.wp_init_vertices, requires_grad=False)
-        self.acc_count = wp.zeros(1, dtype=wp.int32, requires_grad=False)
+        if cfg.data_type == "real":
+            self.prev_acc = wp.zeros_like(self.wp_init_vertices, requires_grad=False)
+            self.acc_count = wp.zeros(1, dtype=wp.int32, requires_grad=False)
 
         self.wp_current_object_points = wp.from_torch(
             self.gt_object_points[1].clone(), dtype=wp.vec3, requires_grad=False
         )
-        self.wp_current_object_visibilities = wp.from_torch(
-            self.gt_object_visibilities[1].clone(), dtype=wp.int32, requires_grad=False
-        )
-        self.wp_current_object_motions_valid = wp.from_torch(
-            self.gt_object_motions_valid[0].clone(), dtype=wp.int32, requires_grad=False
-        )
-        self.num_valid_visibilities = int(self.gt_object_visibilities[1].sum())
-        self.num_valid_motions = int(self.gt_object_motions_valid[0].sum())
+        if cfg.data_type == "real":
+            self.wp_current_object_visibilities = wp.from_torch(
+                self.gt_object_visibilities[1].clone(),
+                dtype=wp.int32,
+                requires_grad=False,
+            )
+            self.wp_current_object_motions_valid = wp.from_torch(
+                self.gt_object_motions_valid[0].clone(),
+                dtype=wp.int32,
+                requires_grad=False,
+            )
+            self.num_valid_visibilities = int(self.gt_object_visibilities[1].sum())
+            self.num_valid_motions = int(self.gt_object_motions_valid[0].sum())
 
-        self.wp_original_control_point = wp.from_torch(
-            self.controller_points[0].clone(), dtype=wp.vec3, requires_grad=False
-        )
-        self.wp_target_control_point = wp.from_torch(
-            self.controller_points[1].clone(), dtype=wp.vec3, requires_grad=False
-        )
+            self.wp_original_control_point = wp.from_torch(
+                self.controller_points[0].clone(), dtype=wp.vec3, requires_grad=False
+            )
+            self.wp_target_control_point = wp.from_torch(
+                self.controller_points[1].clone(), dtype=wp.vec3, requires_grad=False
+            )
 
-        self.chamfer_loss = wp.zeros(1, dtype=wp.float32, requires_grad=True)
-        self.track_loss = wp.zeros(1, dtype=wp.float32, requires_grad=True)
-        self.acc_loss = wp.zeros(1, dtype=wp.float32, requires_grad=True)
+            self.chamfer_loss = wp.zeros(1, dtype=wp.float32, requires_grad=True)
+            self.track_loss = wp.zeros(1, dtype=wp.float32, requires_grad=True)
+            self.acc_loss = wp.zeros(1, dtype=wp.float32, requires_grad=True)
         self.loss = wp.zeros(1, dtype=wp.float32, requires_grad=True)
 
         # Initialize the warp parameters
@@ -454,6 +553,13 @@ class SpringMassSystemWarp:
         for i in range(self.num_substeps + 1):
             state = State(self.wp_init_velocities, self.num_control_points)
             self.wp_states.append(state)
+        if cfg.data_type == "real":
+            self.distance_matrix = wp.zeros(
+                (self.num_original_points, self.num_surface_points), requires_grad=False
+            )
+            self.neigh_indices = wp.zeros(
+                (self.num_original_points), dtype=wp.int32, requires_grad=False
+            )
 
         # Parameter to be optimized
         self.wp_spring_Y = wp.from_torch(
@@ -461,22 +567,36 @@ class SpringMassSystemWarp:
             * torch.ones(self.n_springs, dtype=torch.float32, device=self.device),
             requires_grad=True,
         )
-        self.distance_matrix = wp.zeros(
-            (self.num_original_points, self.num_surface_points), requires_grad=False
+        self.wp_collide_elas = wp.from_torch(
+            torch.tensor([collide_elas], dtype=torch.float32, device=self.device),
+            requires_grad=True,
         )
-        self.neigh_indices = wp.zeros(
-            (self.num_original_points), dtype=wp.int32, requires_grad=False
+        self.wp_collide_fric = wp.from_torch(
+            torch.tensor([collide_fric], dtype=torch.float32, device=self.device),
+            requires_grad=True,
         )
 
         # Create the CUDA graph to acclerate
         if cfg.use_graph:
-            with wp.ScopedCapture() as capture:
-                self.tape = wp.Tape()
-                with self.tape:
-                    self.step()
-                    self.calculate_loss()
-                self.tape.backward(self.loss)
-            self.graph = capture.graph
+            if cfg.data_type == "real":
+                with wp.ScopedCapture() as capture:
+                    self.tape = wp.Tape()
+                    with self.tape:
+                        self.step()
+                        self.calculate_loss()
+                    self.tape.backward(self.loss)
+                self.graph = capture.graph
+            elif cfg.data_type == "synthetic":
+                # For synthetic data, we compute simple loss
+                with wp.ScopedCapture() as capture:
+                    self.tape = wp.Tape()
+                    with self.tape:
+                        self.step()
+                        self.calculate_simple_loss()
+                    self.tape.backward(self.loss)
+                self.graph = capture.graph
+            else:
+                raise NotImplementedError
 
             with wp.ScopedCapture() as forward_capture:
                 self.step()
@@ -485,19 +605,20 @@ class SpringMassSystemWarp:
             self.tape = wp.Tape()
 
     def set_controller_target(self, frame_idx):
-        # Set the controller points
-        wp.launch(
-            copy_vec3,
-            dim=self.num_control_points,
-            inputs=[self.controller_points[frame_idx - 1]],
-            outputs=[self.wp_original_control_point],
-        )
-        wp.launch(
-            copy_vec3,
-            dim=self.num_control_points,
-            inputs=[self.controller_points[frame_idx]],
-            outputs=[self.wp_target_control_point],
-        )
+        if self.controller_points is not None:
+            # Set the controller points
+            wp.launch(
+                copy_vec3,
+                dim=self.num_control_points,
+                inputs=[self.controller_points[frame_idx - 1]],
+                outputs=[self.wp_original_control_point],
+            )
+            wp.launch(
+                copy_vec3,
+                dim=self.num_control_points,
+                inputs=[self.controller_points[frame_idx]],
+                outputs=[self.wp_target_control_point],
+            )
 
         # Set the target points
         wp.launch(
@@ -506,21 +627,27 @@ class SpringMassSystemWarp:
             inputs=[self.gt_object_points[frame_idx]],
             outputs=[self.wp_current_object_points],
         )
-        wp.launch(
-            copy_int,
-            dim=self.num_original_points,
-            inputs=[self.gt_object_visibilities[frame_idx]],
-            outputs=[self.wp_current_object_visibilities],
-        )
-        wp.launch(
-            copy_int,
-            dim=self.num_original_points,
-            inputs=[self.gt_object_motions_valid[frame_idx - 1]],
-            outputs=[self.wp_current_object_motions_valid],
-        )
 
-        self.num_valid_visibilities = int(self.gt_object_visibilities[frame_idx].sum())
-        self.num_valid_motions = int(self.gt_object_motions_valid[frame_idx - 1].sum())
+        if cfg.data_type == "real":
+            wp.launch(
+                copy_int,
+                dim=self.num_original_points,
+                inputs=[self.gt_object_visibilities[frame_idx]],
+                outputs=[self.wp_current_object_visibilities],
+            )
+            wp.launch(
+                copy_int,
+                dim=self.num_original_points,
+                inputs=[self.gt_object_motions_valid[frame_idx - 1]],
+                outputs=[self.wp_current_object_motions_valid],
+            )
+
+            self.num_valid_visibilities = int(
+                self.gt_object_visibilities[frame_idx].sum()
+            )
+            self.num_valid_motions = int(
+                self.gt_object_motions_valid[frame_idx - 1].sum()
+            )
 
     def set_init_state(self, wp_x, wp_v):
         # Detach and clone and set requires_grad=True
@@ -568,8 +695,6 @@ class SpringMassSystemWarp:
     def step(self):
         for i in range(self.num_substeps):
             self.wp_states[i].clear_forces()
-            self.wp_states[i].clear_control()
-            self.wp_states[i + 1].clear_states()
             if not self.controller_points is None:
                 # Set the control point
                 wp.launch(
@@ -604,17 +729,31 @@ class SpringMassSystemWarp:
                 outputs=[self.wp_states[i].wp_vertice_forces],
             )
 
-            # Update the x and v
+            # Update the wp_v_before_ground using the vertive_forces
             wp.launch(
-                kernel=integrate_particles,
+                kernel=update_vel_from_force,
                 dim=self.num_object_points,
                 inputs=[
-                    self.wp_states[i].wp_x,
                     self.wp_states[i].wp_v,
                     self.wp_states[i].wp_vertice_forces,
                     self.wp_masses,
                     self.dt,
                     self.drag_damping,
+                    self.reverse_factor,
+                ],
+                outputs=[self.wp_states[i].wp_v_before_ground],
+            )
+
+            # Update the x and v
+            wp.launch(
+                kernel=integrate_ground_collision,
+                dim=self.num_object_points,
+                inputs=[
+                    self.wp_states[i].wp_x,
+                    self.wp_states[i].wp_v_before_ground,
+                    self.wp_collide_elas,
+                    self.wp_collide_fric,
+                    self.dt,
                     self.reverse_factor,
                 ],
                 outputs=[self.wp_states[i + 1].wp_x, self.wp_states[i + 1].wp_v],
@@ -690,10 +829,23 @@ class SpringMassSystemWarp:
             outputs=[self.loss],
         )
 
+    def calculate_simple_loss(self):
+        wp.launch(
+            compute_simple_loss,
+            dim=self.num_object_points,
+            inputs=[
+                self.wp_states[-1].wp_x,
+                self.wp_current_object_points,
+                self.num_object_points,
+            ],
+            outputs=[self.loss],
+        )
+
     def clear_loss(self):
-        self.chamfer_loss.zero_()
-        self.track_loss.zero_()
-        self.acc_loss.zero_()
+        if cfg.data_type == "real":
+            self.distance_matrix.zero_()
+            self.neigh_indices.zero_()
+            self.chamfer_loss.zero_()
+            self.track_loss.zero_()
+            self.acc_loss.zero_()
         self.loss.zero_()
-        self.distance_matrix.zero_()
-        self.neigh_indices.zero_()

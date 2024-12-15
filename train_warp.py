@@ -1,4 +1,4 @@
-from qqtt import RealInvPhyTrainerWarp
+from qqtt import InvPhyTrainerWarp
 from qqtt.utils import logger, cfg
 from datetime import datetime
 
@@ -31,7 +31,7 @@ def demo_real():
     cfg.spring_Y_min = 0
     # cfg.init_spring_Y = 1e3
     logger.set_log_file(path=base_dir, name="inv_phy_log")
-    trainer = RealInvPhyTrainerWarp(
+    trainer = InvPhyTrainerWarp(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect/rope_double_hand/final_data.pkl",
         base_dir=base_dir,
     )
@@ -48,11 +48,11 @@ def demo_multiple_k():
 
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/table_2k"
+    base_dir = f"experiments/warp_ground_collision"
     cfg.num_substeps = 1000
     cfg.init_spring_Y = 3e4
     logger.set_log_file(path=base_dir, name="inv_phy_log")
-    trainer = RealInvPhyTrainerWarp(
+    trainer = InvPhyTrainerWarp(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/taichi_simulator_test/data_prepare/multiple_k_data_prepare/table_2k.npy",
         base_dir=base_dir,
     )

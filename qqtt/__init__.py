@@ -1,2 +1,2 @@
 from .model import SpringMassSystemWarp
-from .engine import RealInvPhyTrainerWarp
+from .engine import InvPhyTrainerWarp

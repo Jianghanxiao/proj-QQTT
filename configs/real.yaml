@@ -16,6 +16,11 @@ radius: 0.01
 max_neighbours: 20
 spring_Y_min: 0
 spring_Y_max: 1e5
+reverse_z: true
+vp_front: [1, 0, -2]
+vp_up: [0, 0, -1]
+vp_zoom: 1
+visualize_ground: false
 collision_learn: true
 use_graph: true
 chamfer_weight: 1.0
