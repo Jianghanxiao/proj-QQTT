@@ -24,7 +24,7 @@ set_all_seeds(seed)
 def demo_real():
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/debug_warp_rope"
+    base_dir = f"experiments/warp_rope_acc"
     cfg.spring_Y_min = 0
     # cfg.init_spring_Y = 1e3
     logger.set_log_file(path=base_dir, name="inv_phy_log")

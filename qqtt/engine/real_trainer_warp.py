@@ -170,9 +170,11 @@ class RealInvPhyTrainerWarp:
             total_loss = 0.0
             total_chamfer_loss = 0.0
             total_track_loss = 0.0
+            total_acc_loss = 0.0
             self.simulator.set_init_state(
                 self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
             )
+            self.simulator.set_acc_count(False)
             with wp.ScopedTimer("backward"):
                 for j in tqdm(range(1, self.dataset.frame_len)):
                     self.simulator.set_controller_target(j)
@@ -198,6 +200,20 @@ class RealInvPhyTrainerWarp:
                     total_chamfer_loss += chamfer_loss.item()
                     total_track_loss += track_loss.item()
 
+                    if (
+                        wp.to_torch(self.simulator.acc_count, requires_grad=False)[0]
+                        == 1
+                    ):
+                        acc_loss = wp.to_torch(
+                            self.simulator.acc_loss, requires_grad=False
+                        )
+                        total_acc_loss += acc_loss.item()
+                    else:
+                        self.simulator.set_acc_count(True)
+
+                    # Update the prev_acc used to calculate the acceleration loss
+                    self.simulator.update_acc()
+
                     if cfg.use_graph:
                         # Only need to clear the gradient, the tape is created in the graph
                         self.simulator.tape.zero()
@@ -214,13 +230,13 @@ class RealInvPhyTrainerWarp:
             total_loss /= self.dataset.frame_len - 1
             total_chamfer_loss /= self.dataset.frame_len - 1
             total_track_loss /= self.dataset.frame_len - 1
-            # total_acc_loss /= self.dataset.frame_len - 2
+            total_acc_loss /= self.dataset.frame_len - 2
             wandb.log(
                 {
                     "loss": total_loss,
                     "chamfer_loss": total_chamfer_loss,
                     "track_loss": total_track_loss,
-                    # "acc_loss": total_acc_loss,
+                    "acc_loss": total_acc_loss,
                     # "collide_else": self.simulator.collide_elas.item(),
                     # "collide_fric": self.simulator.collide_fric.item(),
                     # "collide_object_elas": self.simulator.collide_object_elas.item(),
@@ -247,8 +263,8 @@ class RealInvPhyTrainerWarp:
                 # TODO: Save other parameters
                 cur_model = {
                     "epoch": i,
-                    "spring_Y": wp.to_torch(
-                        self.simulator.wp_spring_Y, requires_grad=False
+                    "spring_Y": torch.exp(
+                        wp.to_torch(self.simulator.wp_spring_Y, requires_grad=False)
                     ),
                     "optimizer_state_dict": self.optimizer.state_dict(),
                 }
