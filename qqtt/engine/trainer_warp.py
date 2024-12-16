@@ -18,6 +18,9 @@ class InvPhyTrainerWarp:
         cfg.base_dir = base_dir
         cfg.device = device
         cfg.run_name = base_dir.split("/")[-1]
+
+        self.init_masks = None
+        self.init_velocities = None
         # Load the data
         if cfg.data_type == "real":
             self.dataset = RealData(visualize=False)
@@ -42,11 +45,20 @@ class InvPhyTrainerWarp:
             self.num_original_points = None
             self.num_surface_points = None
             self.num_all_points = len(self.dataset.data[0])
+            # Prepare for the multiple object case
+            if mask_path is not None:
+                mask = np.load(mask_path)
+                self.init_masks = torch.tensor(
+                    mask, dtype=torch.float32, device=cfg.device
+                )
+            if velocity_path is not None:
+                velocity = np.load(velocity_path)
+                self.init_velocities = torch.tensor(
+                    velocity, dtype=torch.float32, device=cfg.device
+                )
+
         else:
             raise ValueError(f"Data type {cfg.data_type} not supported")
-
-        self.init_masks = None
-        self.init_velocities = None
 
         # Initialize the vertices, springs, rest lengths and masses
         if self.controller_points is None:
@@ -80,7 +92,7 @@ class InvPhyTrainerWarp:
             drag_damping=cfg.drag_damping,
             # collide_object_elas=cfg.collide_object_elas,
             # collide_object_fric=cfg.collide_object_fric,
-            # init_masks=self.init_masks,
+            init_masks=self.init_masks,
             init_velocities=self.init_velocities,
             num_object_points=self.num_all_points,
             num_surface_points=self.num_surface_points,
@@ -179,6 +191,55 @@ class InvPhyTrainerWarp:
             masses = np.ones(len(points))
             return (
                 torch.tensor(points, dtype=torch.float32, device=cfg.device),
+                torch.tensor(springs, dtype=torch.int32, device=cfg.device),
+                torch.tensor(rest_lengths, dtype=torch.float32, device=cfg.device),
+                torch.tensor(masses, dtype=torch.float32, device=cfg.device),
+            )
+        else:
+            mask = mask.cpu().numpy()
+            # Get the unique value in masks
+            unique_values = np.unique(mask)
+            vertices = []
+            springs = []
+            rest_lengths = []
+            index = 0
+            # Loop different objects to connect the springs separately
+            for value in unique_values:
+                temp_points = object_points[mask == value]
+                temp_pcd = o3d.geometry.PointCloud()
+                temp_pcd.points = o3d.utility.Vector3dVector(temp_points)
+                temp_tree = o3d.geometry.KDTreeFlann(temp_pcd)
+                temp_spring_flags = np.zeros((len(temp_points), len(temp_points)))
+                temp_springs = []
+                temp_rest_lengths = []
+                for i in range(len(temp_points)):
+                    [k, idx, _] = temp_tree.search_hybrid_vector_3d(
+                        temp_points[i], radius, max_neighbours
+                    )
+                    idx = idx[1:]
+                    for j in idx:
+                        rest_length = np.linalg.norm(temp_points[i] - temp_points[j])
+                        if (
+                            temp_spring_flags[i, j] == 0
+                            and temp_spring_flags[j, i] == 0
+                            and rest_length > 1e-4
+                        ):
+                            temp_spring_flags[i, j] = 1
+                            temp_spring_flags[j, i] = 1
+                            temp_springs.append([i + index, j + index])
+                            temp_rest_lengths.append(rest_length)
+                vertices += temp_points.tolist()
+                springs += temp_springs
+                rest_lengths += temp_rest_lengths
+                index += len(temp_points)
+
+            vertices = np.array(vertices)
+            springs = np.array(springs)
+            rest_lengths = np.array(rest_lengths)
+            masses = np.ones(len(vertices))
+
+            return (
+                torch.tensor(vertices, dtype=torch.float32, device=cfg.device),
                 torch.tensor(springs, dtype=torch.int32, device=cfg.device),
                 torch.tensor(rest_lengths, dtype=torch.float32, device=cfg.device),
                 torch.tensor(masses, dtype=torch.float32, device=cfg.device),

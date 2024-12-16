@@ -42,19 +42,19 @@ class State:
         return self.wp_x.requires_grad
 
 
-@wp.kernel
+@wp.kernel(enable_backward=False)
 def copy_vec3(data: wp.array(dtype=wp.vec3), origin: wp.array(dtype=wp.vec3)):
     tid = wp.tid()
     origin[tid] = data[tid]
 
 
-@wp.kernel
+@wp.kernel(enable_backward=False)
 def copy_int(data: wp.array(dtype=wp.int32), origin: wp.array(dtype=wp.int32)):
     tid = wp.tid()
     origin[tid] = data[tid]
 
 
-@wp.kernel
+@wp.kernel(enable_backward=False)
 def set_control_points(
     num_substeps: int,
     original_control_point: wp.array(dtype=wp.vec3),
@@ -208,7 +208,7 @@ def integrate_ground_collision(
     v_new[tid] = v1
 
 
-@wp.kernel
+@wp.kernel(enable_backward=False)
 def compute_distances(
     pred: wp.array(dtype=wp.vec3),
     gt: wp.array(dtype=wp.vec3),
@@ -223,7 +223,7 @@ def compute_distances(
         distances[i, j] = 1e6
 
 
-@wp.kernel
+@wp.kernel(enable_backward=False)
 def compute_neigh_indices(
     distances: wp.array2d(dtype=float),
     neigh_indices: wp.array(dtype=wp.int32),
@@ -303,12 +303,12 @@ def compute_track_loss(
         wp.atomic_add(track_loss, 0, final_track_loss)
 
 
-@wp.kernel
+@wp.kernel(enable_backward=False)
 def set_int(input: int, output: wp.array(dtype=wp.int32)):
     output[0] = input
 
 
-@wp.kernel
+@wp.kernel(enable_backward=False)
 def update_acc(
     v1: wp.array(dtype=wp.vec3),
     v2: wp.array(dtype=wp.vec3),
@@ -439,7 +439,7 @@ class SpringMassSystemWarp:
         drag_damping,
         # collide_object_elas=0.7,
         # collide_object_fric=0.3,
-        # init_masks=None,
+        init_masks=None,
         # collision_dist=0.04,
         init_velocities=None,
         num_object_points=None,
@@ -494,6 +494,15 @@ class SpringMassSystemWarp:
         )
         self.controller_points = controller_points
 
+        # Deal with the any collision detection
+        self.object_collision_flag = 0
+        if init_masks is not None:
+            if torch.unique(init_masks).shape[0] > 1:
+                self.object_collision_flag = 1
+            self.wp_masks = wp.from_torch(
+                init_masks[:num_object_points].int(), dtype=wp.int32, requires_grad=False
+            )
+        
         # Initialize the GT for calculating losses
         self.gt_object_points = gt_object_points
         if cfg.data_type == "real":
