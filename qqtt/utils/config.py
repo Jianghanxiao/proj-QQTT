@@ -33,6 +33,7 @@ class Config:
         self.vp_up = [0, 0, -1]
         self.vp_zoom = 1
 
+        self.collision_dist = 0.06
         # Parameters on whether update the collision parameters
         self.collision_learn = True
 

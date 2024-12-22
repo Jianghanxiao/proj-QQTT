@@ -21,8 +21,8 @@ vp_front: [1, 0, -2]
 vp_up: [0, 0, -1]
 vp_zoom: 1
 visualize_ground: false
+collision_dist: 0.01
 collision_learn: true
-use_graph: true
 chamfer_weight: 1.0
 track_weight: 1.0
 acc_weight: 0.01

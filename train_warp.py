@@ -65,8 +65,9 @@ def demo_billiard():
     cfg.load_from_yaml("configs/synthetic.yaml")
     print(f"[DATA TYPE]: {cfg.data_type}")
 
-    base_dir = f"experiments/debug_billiard_warp"
+    base_dir = f"experiments/debug_billiard_warp_quick_0.06"
     cfg.iterations = 1000
+    cfg.vis_interval = 50
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainerWarp(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/billiard.npy",
@@ -79,6 +80,6 @@ def demo_billiard():
 
 
 if __name__ == "__main__":
-    # demo_real()
+    demo_real()
     # demo_multiple_k()
-    demo_billiard()
+    # demo_billiard()

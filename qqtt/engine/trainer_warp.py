@@ -90,9 +90,10 @@ class InvPhyTrainerWarp:
             collide_fric=cfg.init_collide_fric,
             dashpot_damping=cfg.dashpot_damping,
             drag_damping=cfg.drag_damping,
-            # collide_object_elas=cfg.collide_object_elas,
-            # collide_object_fric=cfg.collide_object_fric,
+            collide_object_elas=cfg.collide_object_elas,
+            collide_object_fric=cfg.collide_object_fric,
             init_masks=self.init_masks,
+            collision_dist=cfg.collision_dist,
             init_velocities=self.init_velocities,
             num_object_points=self.num_all_points,
             num_surface_points=self.num_surface_points,
@@ -111,6 +112,8 @@ class InvPhyTrainerWarp:
                 wp.to_torch(self.simulator.wp_spring_Y),
                 wp.to_torch(self.simulator.wp_collide_elas),
                 wp.to_torch(self.simulator.wp_collide_fric),
+                wp.to_torch(self.simulator.wp_collide_object_elas),
+                wp.to_torch(self.simulator.wp_collide_object_fric),
             ],
             lr=cfg.base_lr,
             betas=(0.9, 0.99),
@@ -119,7 +122,7 @@ class InvPhyTrainerWarp:
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
-                project="deprecated-InvPhys_twoK",
+                project="test",
                 name=cfg.run_name,
                 config=cfg.to_dict(),
             )
@@ -267,6 +270,8 @@ class InvPhyTrainerWarp:
             with wp.ScopedTimer("backward"):
                 for j in tqdm(range(1, self.dataset.frame_len)):
                     self.simulator.set_controller_target(j)
+                    if self.simulator.object_collision_flag:
+                        self.simulator.update_collision_graph()
 
                     if cfg.use_graph:
                         wp.capture_launch(self.simulator.graph)
@@ -345,8 +350,12 @@ class InvPhyTrainerWarp:
                     "collide_fric": wp.to_torch(
                         self.simulator.wp_collide_fric, requires_grad=False
                     ).item(),
-                    # "collide_object_elas": self.simulator.collide_object_elas.item(),
-                    # "collide_object_fric": self.simulator.collide_object_fric.item(),
+                    "collide_object_elas": wp.to_torch(
+                        self.simulator.wp_collide_object_elas, requires_grad=False
+                    ).item(),
+                    "collide_object_fric": wp.to_torch(
+                        self.simulator.wp_collide_object_fric, requires_grad=False
+                    ).item(),
                 },
                 step=i,
             )
@@ -377,6 +386,12 @@ class InvPhyTrainerWarp:
                     ),
                     "collide_fric": wp.to_torch(
                         self.simulator.wp_collide_fric, requires_grad=False
+                    ),
+                    "collide_object_elas": wp.to_torch(
+                        self.simulator.wp_collide_object_elas, requires_grad=False
+                    ),
+                    "collide_object_fric": wp.to_torch(
+                        self.simulator.wp_collide_object_fric, requires_grad=False
                     ),
                     "optimizer_state_dict": self.optimizer.state_dict(),
                 }
@@ -422,6 +437,9 @@ class InvPhyTrainerWarp:
             for i in tqdm(range(1, frame_len)):
                 if cfg.data_type == "real":
                     self.simulator.set_controller_target(i)
+                if self.simulator.object_collision_flag:
+                    self.simulator.update_collision_graph()
+
                 if cfg.use_graph:
                     wp.capture_launch(self.simulator.forward_graph)
                 else:

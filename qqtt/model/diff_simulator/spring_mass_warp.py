@@ -14,6 +14,7 @@ if not cfg.use_graph:
 class State:
     def __init__(self, wp_init_vertices, num_control_points):
         self.wp_x = wp.zeros_like(wp_init_vertices, requires_grad=True)
+        self.wp_v_before_collision = wp.zeros_like(wp_init_vertices, requires_grad=True)
         self.wp_v_before_ground = wp.zeros_like(wp_init_vertices, requires_grad=True)
         self.wp_v = wp.zeros_like(self.wp_x, requires_grad=True)
         self.wp_vertice_forces = wp.zeros_like(self.wp_x, requires_grad=True)
@@ -154,6 +155,142 @@ def update_vel_from_force(
     v2 = v1 * drag_damping_factor
 
     v_new[tid] = v2
+
+
+@wp.func
+def loop(
+    i: int,
+    collision_indices: wp.array2d(dtype=wp.int32),
+    collision_number: wp.array(dtype=wp.int32),
+    x: wp.array(dtype=wp.vec3),
+    v: wp.array(dtype=wp.vec3),
+    masses: wp.array(dtype=wp.float32),
+    masks: wp.array(dtype=wp.int32),
+    collision_dist: float,
+    clamp_collide_object_elas: float,
+    clamp_collide_object_fric: float,
+):
+    x1 = x[i]
+    v1 = v[i]
+    m1 = masses[i]
+    mask1 = masks[i]
+
+    valid_count = float(0.0)
+    J_sum = wp.vec3(0.0, 0.0, 0.0)
+    for k in range(collision_number[i]):
+        index = collision_indices[i][k]
+        x2 = x[index]
+        v2 = v[index]
+        m2 = masses[index]
+        mask2 = masks[index]
+
+        dis = x2 - x1
+        dis_len = wp.length(dis)
+        relative_v = v2 - v1
+        # If the distance is less than the collision distance and the two points are moving towards each other
+        if (
+            mask1 != mask2
+            and dis_len < collision_dist
+            and wp.dot(dis, relative_v) < -1e-4
+        ):
+            valid_count += 1.0
+
+            collision_normal = dis / wp.max(dis_len, 1e-6)
+            v_rel_n = wp.dot(relative_v, collision_normal) * collision_normal
+            impulse_n = (-(1.0 + clamp_collide_object_elas) * v_rel_n) / (
+                1.0 / m1 + 1.0 / m2
+            )
+            v_rel_n_length = wp.length(v_rel_n)
+
+            v_rel_t = relative_v - v_rel_n
+            v_rel_t_length = wp.max(wp.length(v_rel_t), 1e-6)
+            a = wp.max(
+                0.0,
+                1.0
+                - clamp_collide_object_fric
+                * (1.0 + clamp_collide_object_elas)
+                * v_rel_n_length
+                / v_rel_t_length,
+            )
+            impulse_t = (a - 1.0) * v_rel_t / (1.0 / m1 + 1.0 / m2)
+
+            J = impulse_n + impulse_t
+
+            J_sum += J
+
+    return valid_count, J_sum
+
+
+@wp.kernel(enable_backward=False)
+def update_potential_collision(
+    x: wp.array(dtype=wp.vec3),
+    masks: wp.array(dtype=wp.int32),
+    collision_dist: float,
+    grid: wp.uint64,
+    collision_indices: wp.array2d(dtype=wp.int32),
+    collision_number: wp.array(dtype=wp.int32),
+):
+    tid = wp.tid()
+
+    # order threads by cell
+    i = wp.hash_grid_point_id(grid, tid)
+
+    x1 = x[i]
+    mask1 = masks[i]
+
+    neighbors = wp.hash_grid_query(grid, x1, collision_dist * 5.0)
+    for index in neighbors:
+        if index != i:
+            x2 = x[index]
+            mask2 = masks[index]
+
+            dis = x2 - x1
+            dis_len = wp.length(dis)
+            # If the distance is less than the collision distance and the two points are moving towards each other
+            if mask1 != mask2 and dis_len < collision_dist:
+                collision_indices[i][collision_number[i]] = index
+                collision_number[i] += 1
+
+
+@wp.kernel
+def object_collision(
+    x: wp.array(dtype=wp.vec3),
+    v: wp.array(dtype=wp.vec3),
+    masses: wp.array(dtype=wp.float32),
+    masks: wp.array(dtype=wp.int32),
+    collide_object_elas: wp.array(dtype=float),
+    collide_object_fric: wp.array(dtype=float),
+    collision_dist: float,
+    collision_indices: wp.array2d(dtype=wp.int32),
+    collision_number: wp.array(dtype=wp.int32),
+    v_new: wp.array(dtype=wp.vec3),
+):
+    tid = wp.tid()
+
+    v1 = v[tid]
+    m1 = masses[tid]
+
+    clamp_collide_object_elas = wp.clamp(collide_object_elas[0], low=0.0, high=1.0)
+    clamp_collide_object_fric = wp.clamp(collide_object_fric[0], low=0.0, high=2.0)
+
+    valid_count, J_sum = loop(
+        tid,
+        collision_indices,
+        collision_number,
+        x,
+        v,
+        masses,
+        masks,
+        collision_dist,
+        clamp_collide_object_elas,
+        clamp_collide_object_fric,
+    )
+
+    if valid_count > 0:
+        J_average = J_sum / valid_count
+        v_new[tid] = v1 - J_average / m1
+    else:
+        v_new[tid] = v1
 
 
 @wp.kernel
@@ -437,10 +574,10 @@ class SpringMassSystemWarp:
         collide_fric,
         dashpot_damping,
         drag_damping,
-        # collide_object_elas=0.7,
-        # collide_object_fric=0.3,
+        collide_object_elas=0.7,
+        collide_object_fric=0.3,
         init_masks=None,
-        # collision_dist=0.04,
+        collision_dist=0.06,
         init_velocities=None,
         num_object_points=None,
         num_surface_points=None,
@@ -500,9 +637,23 @@ class SpringMassSystemWarp:
             if torch.unique(init_masks).shape[0] > 1:
                 self.object_collision_flag = 1
             self.wp_masks = wp.from_torch(
-                init_masks[:num_object_points].int(), dtype=wp.int32, requires_grad=False
+                init_masks[:num_object_points].int(),
+                dtype=wp.int32,
+                requires_grad=False,
             )
-        
+        if self.object_collision_flag:
+            self.collision_grid = wp.HashGrid(128, 128, 128)
+            self.collision_dist = collision_dist
+
+            self.wp_collision_indices = wp.zeros(
+                (self.wp_init_vertices.shape[0], 500),
+                dtype=wp.int32,
+                requires_grad=False,
+            )
+            self.wp_collision_number = wp.zeros(
+                (self.wp_init_vertices.shape[0]), dtype=wp.int32, requires_grad=False
+            )
+
         # Initialize the GT for calculating losses
         self.gt_object_points = gt_object_points
         if cfg.data_type == "real":
@@ -578,11 +729,23 @@ class SpringMassSystemWarp:
         )
         self.wp_collide_elas = wp.from_torch(
             torch.tensor([collide_elas], dtype=torch.float32, device=self.device),
-            requires_grad=True,
+            requires_grad=cfg.collision_learn,
         )
         self.wp_collide_fric = wp.from_torch(
             torch.tensor([collide_fric], dtype=torch.float32, device=self.device),
-            requires_grad=True,
+            requires_grad=cfg.collision_learn,
+        )
+        self.wp_collide_object_elas = wp.from_torch(
+            torch.tensor(
+                [collide_object_elas], dtype=torch.float32, device=self.device
+            ),
+            requires_grad=cfg.collision_learn,
+        )
+        self.wp_collide_object_fric = wp.from_torch(
+            torch.tensor(
+                [collide_object_fric], dtype=torch.float32, device=self.device
+            ),
+            requires_grad=cfg.collision_learn,
         )
 
         # Create the CUDA graph to acclerate
@@ -701,6 +864,22 @@ class SpringMassSystemWarp:
             outputs=[self.prev_acc],
         )
 
+    def update_collision_graph(self):
+        assert self.object_collision_flag
+        self.collision_grid.build(self.wp_states[0].wp_x, self.collision_dist * 5.0)
+        self.wp_collision_number.zero_()
+        wp.launch(
+            update_potential_collision,
+            dim=self.num_object_points,
+            inputs=[
+                self.wp_states[0].wp_x,
+                self.wp_masks,
+                self.collision_dist,
+                self.collision_grid.id,
+            ],
+            outputs=[self.wp_collision_indices, self.wp_collision_number],
+        )
+
     def step(self):
         for i in range(self.num_substeps):
             self.wp_states[i].clear_forces()
@@ -738,7 +917,12 @@ class SpringMassSystemWarp:
                 outputs=[self.wp_states[i].wp_vertice_forces],
             )
 
-            # Update the wp_v_before_ground using the vertive_forces
+            if self.object_collision_flag:
+                output_v = self.wp_states[i].wp_v_before_collision
+            else:
+                output_v = self.wp_states[i].wp_v_before_ground
+
+            # Update the output_v using the vertive_forces
             wp.launch(
                 kernel=update_vel_from_force,
                 dim=self.num_object_points,
@@ -750,8 +934,27 @@ class SpringMassSystemWarp:
                     self.drag_damping,
                     self.reverse_factor,
                 ],
-                outputs=[self.wp_states[i].wp_v_before_ground],
+                outputs=[output_v],
             )
+
+            if self.object_collision_flag:
+                # Update the wp_v_before_ground based on the collision handling
+                wp.launch(
+                    kernel=object_collision,
+                    dim=self.num_object_points,
+                    inputs=[
+                        self.wp_states[i].wp_x,
+                        self.wp_states[i].wp_v_before_collision,
+                        self.wp_masses,
+                        self.wp_masks,
+                        self.wp_collide_object_elas,
+                        self.wp_collide_object_fric,
+                        self.collision_dist,
+                        self.wp_collision_indices,
+                        self.wp_collision_number,
+                    ],
+                    outputs=[self.wp_states[i].wp_v_before_ground],
+                )
 
             # Update the x and v
             wp.launch(

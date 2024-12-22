@@ -21,4 +21,5 @@ vp_front: [-1, 0, 0.5]
 vp_up: [0, 0, 1]
 vp_zoom: 3
 visualize_ground: true
+collision_dist: 0.06
 collision_learn: true
