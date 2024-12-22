@@ -108,7 +108,10 @@ def visualize_pc(
                     [[10, 10, 0], [10, -10, 0], [-10, -10, 0], [-10, 10, 0]]
                 )
                 # Define ground plane triangular faces
-                ground_triangles = np.array([[0, 2, 1], [0, 3, 2]])
+                if cfg.reverse_z:
+                    ground_triangles = np.array([[0, 1, 2], [0, 2, 3]])
+                else:
+                    ground_triangles = np.array([[0, 2, 1], [0, 3, 2]])
                 ground_mesh = o3d.geometry.TriangleMesh()
                 ground_mesh.vertices = o3d.utility.Vector3dVector(ground_vertices)
                 ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)

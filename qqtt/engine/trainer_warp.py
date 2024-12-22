@@ -56,7 +56,6 @@ class InvPhyTrainerWarp:
                 self.init_velocities = torch.tensor(
                     velocity, dtype=torch.float32, device=cfg.device
                 )
-
         else:
             raise ValueError(f"Data type {cfg.data_type} not supported")
 
@@ -421,6 +420,32 @@ class InvPhyTrainerWarp:
                 )
 
         wandb.finish()
+
+    def test(self, model_path):
+        # Load the model
+        logger.info(f"Load model from {model_path}")
+        checkpoint = torch.load(model_path, map_location=cfg.device)
+
+        spring_Y = checkpoint["spring_Y"]
+        collide_elas = checkpoint["collide_elas"]
+        collide_fric = checkpoint["collide_fric"]
+        collide_object_elas = checkpoint["collide_object_elas"]
+        collide_object_fric = checkpoint["collide_object_fric"]
+
+        self.simulator.set_spring_Y(torch.log(spring_Y).detach().clone())
+        self.simulator.set_collide(
+            collide_elas.detach().clone(), collide_fric.detach().clone()
+        )
+        self.simulator.set_collide_object(
+            collide_object_elas.detach().clone(), collide_object_fric.detach().clone()
+        )
+
+        # Render the initial visualization
+        video_path = f"{cfg.base_dir}/test.mp4"
+        self.visualize_sim(save_only=True, video_path=video_path)
+
+        while True:
+            self.visualize_sim(save_only=False)
 
     def visualize_sim(self, save_only=True, video_path=None):
         logger.info("Visualizing the simulation")

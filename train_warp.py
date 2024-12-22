@@ -1,7 +1,6 @@
 from qqtt import InvPhyTrainerWarp
 from qqtt.utils import logger, cfg
 from datetime import datetime
-
 import random
 import numpy as np
 import torch
@@ -27,8 +26,7 @@ def demo_real():
 
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/debug_warp_rope_acc"
-    cfg.spring_Y_min = 0
+    base_dir = f"experiments/debug_warp_rope_full"
     # cfg.init_spring_Y = 1e3
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainerWarp(
@@ -48,7 +46,7 @@ def demo_multiple_k():
 
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/debug_warp_ground_collision"
+    base_dir = f"experiments/debug_warp_table_full"
     cfg.num_substeps = 1000
     cfg.init_spring_Y = 3e4
     logger.set_log_file(path=base_dir, name="inv_phy_log")
@@ -80,6 +78,6 @@ def demo_billiard():
 
 
 if __name__ == "__main__":
-    demo_real()
-    # demo_multiple_k()
+    # demo_real()
+    demo_multiple_k()
     # demo_billiard()

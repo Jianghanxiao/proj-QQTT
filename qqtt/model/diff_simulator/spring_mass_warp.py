@@ -56,6 +56,12 @@ def copy_int(data: wp.array(dtype=wp.int32), origin: wp.array(dtype=wp.int32)):
 
 
 @wp.kernel(enable_backward=False)
+def copy_float(data: wp.array(dtype=wp.float32), origin: wp.array(dtype=wp.float32)):
+    tid = wp.tid()
+    origin[tid] = data[tid]
+
+
+@wp.kernel(enable_backward=False)
 def set_control_points(
     num_substeps: int,
     original_control_point: wp.array(dtype=wp.vec3),
@@ -1061,3 +1067,41 @@ class SpringMassSystemWarp:
             self.track_loss.zero_()
             self.acc_loss.zero_()
         self.loss.zero_()
+
+    # Functions used to load the parmeters
+    def set_spring_Y(self, spring_Y):
+        # assert spring_Y.shape[0] == self.n_springs
+        wp.launch(
+            copy_float,
+            dim=self.n_springs,
+            inputs=[spring_Y],
+            outputs=[self.wp_spring_Y],
+        )
+
+    def set_collide(self, collide_elas, collide_fric):
+        wp.launch(
+            copy_float,
+            dim=1,
+            inputs=[collide_elas],
+            outputs=[self.wp_collide_elas],
+        )
+        wp.launch(
+            copy_float,
+            dim=1,
+            inputs=[collide_fric],
+            outputs=[self.wp_collide_fric],
+        )
+
+    def set_collide_object(self, collide_object_elas, collide_object_fric):
+        wp.launch(
+            copy_float,
+            dim=1,
+            inputs=[collide_object_elas],
+            outputs=[self.wp_collide_object_elas],
+        )
+        wp.launch(
+            copy_float,
+            dim=1,
+            inputs=[collide_object_fric],
+            outputs=[self.wp_collide_object_fric],
+        )
