@@ -41,6 +41,11 @@ python data_process_pcd.py
 ```
 
 # Record data
+Set the footswitch button
+```
+footswitch -1 -k space -2 -k space -3 -k space
+```
+
 Controller need to be in the same location on the object in the whole sequence
 ```
 python cameras_calibrate.py
