@@ -69,6 +69,7 @@ class InvPhyTrainerWarp:
             self.init_springs,
             self.init_rest_lengths,
             self.init_masses,
+            self.num_object_springs,
         ) = self._init_start(
             self.structure_points,
             firt_frame_controller_points,
@@ -174,6 +175,8 @@ class InvPhyTrainerWarp:
                         springs.append([i, j])
                         rest_lengths.append(np.linalg.norm(points[i] - points[j]))
 
+            num_object_springs = len(springs)
+
             if controller_points is not None:
                 # Connect the springs between the controller points and the object points
                 num_object_points = len(points)
@@ -196,6 +199,7 @@ class InvPhyTrainerWarp:
                 torch.tensor(springs, dtype=torch.int32, device=cfg.device),
                 torch.tensor(rest_lengths, dtype=torch.float32, device=cfg.device),
                 torch.tensor(masses, dtype=torch.float32, device=cfg.device),
+                num_object_springs,
             )
         else:
             mask = mask.cpu().numpy()
@@ -235,6 +239,8 @@ class InvPhyTrainerWarp:
                 rest_lengths += temp_rest_lengths
                 index += len(temp_points)
 
+            num_object_springs = len(springs)
+
             vertices = np.array(vertices)
             springs = np.array(springs)
             rest_lengths = np.array(rest_lengths)
@@ -245,6 +251,7 @@ class InvPhyTrainerWarp:
                 torch.tensor(springs, dtype=torch.int32, device=cfg.device),
                 torch.tensor(rest_lengths, dtype=torch.float32, device=cfg.device),
                 torch.tensor(masses, dtype=torch.float32, device=cfg.device),
+                num_object_springs,
             )
 
     def train(self, start_epoch=-1):
@@ -377,6 +384,7 @@ class InvPhyTrainerWarp:
                 # Save the parameters
                 cur_model = {
                     "epoch": i,
+                    "num_object_springs": self.num_object_springs,
                     "spring_Y": torch.exp(
                         wp.to_torch(self.simulator.wp_spring_Y, requires_grad=False)
                     ),
@@ -431,6 +439,7 @@ class InvPhyTrainerWarp:
         collide_fric = checkpoint["collide_fric"]
         collide_object_elas = checkpoint["collide_object_elas"]
         collide_object_fric = checkpoint["collide_object_fric"]
+        num_object_springs = checkpoint["num_object_springs"]
 
         self.simulator.set_spring_Y(torch.log(spring_Y).detach().clone())
         self.simulator.set_collide(

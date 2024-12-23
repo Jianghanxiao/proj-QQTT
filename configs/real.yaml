@@ -6,7 +6,7 @@ dashpot_damping: 100
 drag_damping: 3
 base_lr: 1e-3
 iterations: 250
-vis_interval: 10
+vis_interval: 20
 init_spring_Y: 3e3
 init_collide_elas: 0.5
 init_collide_fric: 0.3
