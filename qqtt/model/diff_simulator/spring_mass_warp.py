@@ -1,6 +1,5 @@
 import torch
 from qqtt.utils import logger, cfg
-from .collision_detector import CollisionDetector
 import warp as wp
 
 wp.init()

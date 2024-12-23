@@ -3,7 +3,6 @@
 ```
 conda create -n qqtt python=3.10
 conda activate qqtt
-<!-- pip install --upgrade taichi -->
 pip install warp-lang
 pip install usd-core matplotlib pyglet
 pip install open3d
@@ -11,27 +10,20 @@ pip install open3d
 
 The env for inverse physics
 ```
-conda install pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 pytorch-cuda=11.7 -c pytorch -c nvidia
+conda install pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 pytorch-cuda=11.8 -c pytorch -c nvidia
 pip install stannum
-<!-- pip install opencv-python -->
 pip install termcolor
 pip install fvcore
 pip install wandb
 pip install moviepy imageio
 conda install -c conda-forge opencv 
 pip install cma
-# For pytorch3D
-conda install -c iopath iopath
-conda install pytorch3d -c pytorch3d
-pip install trimesh
-<!-- pip install "pyglet<2" -->
-pip install rtree
 ```
 
 The env for cameras:
 ```
 pip install Cython
-pip install pyrealsense
+pip install pyrealsense2
 pip install atomics
 pip install pynput
 ```

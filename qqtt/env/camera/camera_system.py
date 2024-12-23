@@ -233,7 +233,7 @@ class CameraSystem:
                 ).mean()
 
                 print("Reprojection Error:", error)
-                if error > 0.2:
+                if error > 0.2 or len(charuco_corners) < 11:
                     flag = True
                     print("Please try again.")
                     break
