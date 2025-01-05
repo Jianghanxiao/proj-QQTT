@@ -46,10 +46,14 @@ Set the footswitch button
 footswitch -1 -k space -2 -k space -3 -k space
 ```
 
-Controller need to be in the same location on the object in the whole sequence
+Record the data (Controller need to be in the same location on the object in the whole sequence)
 ```
 python cameras_calibrate.py
 python record_data.py
+```
+
+Process the data
+```
 python data_process/record_data_align.py
 python data_process/data_process_pcd.py
 
