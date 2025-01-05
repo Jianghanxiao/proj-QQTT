@@ -1,17 +1,19 @@
 # Need to further process the collected data and process it
+# Cut the frames and align the data, and create the video for each camera with the fps 30
 import os
 import json
 
 num_cameras = 3
-output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
+output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data_collect"
-case_name = "test"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/rope_variants"
+case_name = "rope_1"
 calibrate_path = f"{base_path}/{case_name}/calibrate.pkl"
 # Need to manually control this for each video to cut (based on camera 0 always)
-start_step = 150
-end_step = 155
+start_step = 315
+end_step = 596
 
+FPS = 30
 
 def exist_dir(dir):
     if not os.path.exists(dir):
@@ -85,5 +87,5 @@ if __name__ == "__main__":
     # Useing opencv to create the video
     for i in range(num_cameras):
         os.system(
-            f"ffmpeg -r 30 -start_number 0 -f image2 -i {output_path}/{case_name}/color/{i}/%d.png -vcodec libx264 -crf 0  -pix_fmt yuv420p {output_path}/{case_name}/color/{i}.mp4"
+            f"ffmpeg -r {FPS} -start_number 0 -f image2 -i {output_path}/{case_name}/color/{i}/%d.png -vcodec libx264 -crf 0  -pix_fmt yuv420p {output_path}/{case_name}/color/{i}.mp4"
         )
