@@ -1,3 +1,5 @@
+# Use co-tracker to track the ibject and controller in the video (pick 5000 pixels in the masked area)
+
 import torch
 import imageio.v3 as iio
 from cotracker.utils.visualizer import Visualizer
@@ -6,8 +8,8 @@ import cv2
 import numpy as np
 import os
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
-case_name = "rope_double_hand"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
+case_name = "rope_1"
 num_cam = len(glob.glob(f"{base_path}/{case_name}/depth/*"))
 device = "cuda"
 
@@ -73,7 +75,7 @@ if __name__ == "__main__":
         vis = Visualizer(
             save_dir=f"{base_path}/{case_name}/cotracker", pad_value=0, linewidth=3
         )
-        vis.visualize(video, pred_tracks, pred_visibility, filename=f"{i}.mp4")
+        vis.visualize(video, pred_tracks, pred_visibility, filename=f"{i}")
         # Save the tracking data into npz
         track_to_save = pred_tracks[0].cpu().numpy()[:, :, ::-1]
         visibility_to_save = pred_visibility[0].cpu().numpy()

@@ -1,3 +1,5 @@
+# Process the mask data to filter out the outliers and generate the processed masks
+
 import numpy as np
 import open3d as o3d
 import json
@@ -7,8 +9,8 @@ import glob
 import cv2
 import pickle
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
-case_name = "rope_double_hand"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
+case_name = "rope_1"
 OBJECT_NAME = "twine"
 CONTROLLER_NAME = "hand"
 

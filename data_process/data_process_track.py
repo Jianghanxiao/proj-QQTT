@@ -1,3 +1,6 @@
+# FIlter the tracking based on the object and controller mask, filter the track based on the neighbour motion
+# Get the nearest controller points that are valid across all frames
+
 import numpy as np
 import open3d as o3d
 from tqdm import tqdm
@@ -6,8 +9,8 @@ import glob
 import pickle
 import matplotlib.pyplot as plt
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
-case_name = "rope_double_hand"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
+case_name = "rope_1"
 
 
 def exist_dir(dir):
@@ -344,7 +347,7 @@ def get_final_track_data(track_data, controller_threhsold=0.01):
     sorted_indices = np.argsort(all_distances)
     sorted_all_indices = all_indices[sorted_indices]
 
-    # Get the top 10 indices
+    # Get the top 100 indices
     top_100_indices = sorted_all_indices[:100]
     top_indices = np.unique(top_100_indices)
     print(f"Controller Point Number: {len(top_indices)}")

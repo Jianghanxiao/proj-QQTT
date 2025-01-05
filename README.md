@@ -1,5 +1,6 @@
 # proj-QQTT
 
+# ENV setup
 ```
 conda create -n qqtt python=3.10
 conda activate qqtt
@@ -28,16 +29,11 @@ pip install atomics
 pip install pynput
 ```
 
-For record new data
+The env for co-tracker:
 ```
-# Do camera calibrations to get the extrinsic parameters
-python cameras_calibrate.py 
-# Record thr raw data
-python record_data.py
-# Do the video alignment
-python record_data_align.py
-# Process to get the PCD data for each frame
-python data_process_pcd.py
+git clone https://github.com/facebookresearch/co-tracker
+cd co-tracker
+pip install -e .
 ```
 
 # Record data
@@ -52,7 +48,7 @@ python cameras_calibrate.py
 python record_data.py
 ```
 
-Process the data
+# Process the data
 ```
 python data_process/record_data_align.py
 python data_process/data_process_pcd.py
