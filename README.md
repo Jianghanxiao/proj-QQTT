@@ -7,6 +7,7 @@ conda activate qqtt
 pip install warp-lang
 pip install usd-core matplotlib pyglet
 pip install open3d
+pip install trimesh
 ```
 
 The env for inverse physics

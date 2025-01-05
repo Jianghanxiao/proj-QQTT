@@ -1,3 +1,6 @@
+# Optionally do the shape completion for the object points (including both suface and interior points)
+# Do the volume sampling for the object points, prioritize the original object points, then surface points, then interior points
+
 import numpy as np
 import open3d as o3d
 from tqdm import tqdm
@@ -7,10 +10,13 @@ import pickle
 import matplotlib.pyplot as plt
 import trimesh
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
-case_name = "rope_double_hand"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
+case_name = "rope_1"
+# TODO: Need to manually adjust the following parameters
 num_surface_points = 1024
 volume_sample_size = 0.005
+# When processing for the rope data, this can be False
+SHAPE_COMPLETION = False
 
 def getSphereMesh(center, radius=0.1, color=[0, 0, 0]):
     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius).translate(center)
@@ -18,7 +24,7 @@ def getSphereMesh(center, radius=0.1, color=[0, 0, 0]):
     return sphere
 
 
-def process_unique_points(track_data, point_num=1024):
+def process_unique_points(track_data):
     object_points = track_data["object_points"]
     object_colors = track_data["object_colors"]
     object_visibilities = track_data["object_visibilities"]
@@ -32,25 +38,28 @@ def process_unique_points(track_data, point_num=1024):
     object_colors = object_colors[:, unique_idx, :]
     object_visibilities = object_visibilities[:, unique_idx]
     object_motions_valid = object_motions_valid[:, unique_idx]
+    
+    if SHAPE_COMPLETION:
+        # Do the shape completion for the first frame object points
+        object_pcd = o3d.geometry.PointCloud()
+        object_pcd.points = o3d.utility.Vector3dVector(object_points[0])
+        alpha = 0.03
+        mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(object_pcd, alpha)
+        mesh.compute_vertex_normals()
+        o3d.visualization.draw_geometries([object_pcd, mesh])
+        # Sample the surface points
+        surface_pcd_sampled = mesh.sample_points_poisson_disk(number_of_points=num_surface_points)
+        surface_points = np.asarray(surface_pcd_sampled.points)
+        # Sample the interior points
+        vertices = np.asarray(mesh.vertices)
+        faces = np.asarray(mesh.triangles)
+        trimesh_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+        interior_points = trimesh.sample.volume_mesh(trimesh_mesh, 10000)
 
-    # Do the shape completion for the first frame object points
-    object_pcd = o3d.geometry.PointCloud()
-    object_pcd.points = o3d.utility.Vector3dVector(object_points[0])
-    alpha = 0.03
-    mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(object_pcd, alpha)
-    mesh.compute_vertex_normals()
-    o3d.visualization.draw_geometries([object_pcd, mesh])
-    # Sample the surface points
-    surface_pcd_sampled = mesh.sample_points_poisson_disk(number_of_points=num_surface_points)
-    surface_points = np.asarray(surface_pcd_sampled.points)
-    # Sample the interior points
-    vertices = np.asarray(mesh.vertices)
-    faces = np.asarray(mesh.triangles)
-    trimesh_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-    interior_points = trimesh.sample.volume_mesh(trimesh_mesh, 10000)
-
-
-    all_points = np.concatenate([surface_points, interior_points, object_points[0]], axis=0)
+    if SHAPE_COMPLETION:
+        all_points = np.concatenate([surface_points, interior_points, object_points[0]], axis=0)
+    else:
+        all_points = object_points[0]
     # Do the volume sampling for the object points, prioritize the original object points, then surface points, then interior points
     min_bound = np.min(all_points, axis=0)
     index = []
@@ -60,19 +69,22 @@ def process_unique_points(track_data, point_num=1024):
         if grid_index not in grid_flag:
             grid_flag[grid_index] = 1
             index.append(i)
-    final_surface_points = []
-    for i in range(surface_points.shape[0]):
-        grid_index = tuple(np.floor((surface_points[i] - min_bound) / volume_sample_size).astype(int))
-        if grid_index not in grid_flag:
-            grid_flag[grid_index] = 1
-            final_surface_points.append(surface_points[i])
-    final_interior_points = []
-    for i in range(interior_points.shape[0]):
-        grid_index = tuple(np.floor((interior_points[i] - min_bound) / volume_sample_size).astype(int))
-        if grid_index not in grid_flag:
-            grid_flag[grid_index] = 1
-            final_interior_points.append(interior_points[i])
-    all_points = np.concatenate([final_surface_points, final_interior_points, object_points[0][index]], axis=0)
+    if SHAPE_COMPLETION:
+        final_surface_points = []
+        for i in range(surface_points.shape[0]):
+            grid_index = tuple(np.floor((surface_points[i] - min_bound) / volume_sample_size).astype(int))
+            if grid_index not in grid_flag:
+                grid_flag[grid_index] = 1
+                final_surface_points.append(surface_points[i])
+        final_interior_points = []
+        for i in range(interior_points.shape[0]):
+            grid_index = tuple(np.floor((interior_points[i] - min_bound) / volume_sample_size).astype(int))
+            if grid_index not in grid_flag:
+                grid_flag[grid_index] = 1
+                final_interior_points.append(interior_points[i])
+        all_points = np.concatenate([final_surface_points, final_interior_points, object_points[0][index]], axis=0)
+    else:
+        all_points = object_points[0][index]
     all_pcd = o3d.geometry.PointCloud()
     all_pcd.points = o3d.utility.Vector3dVector(all_points)
     o3d.visualization.draw_geometries([all_pcd])
@@ -85,8 +97,9 @@ def process_unique_points(track_data, point_num=1024):
     track_data["object_colors"] = object_colors[:, index, :]
     track_data["object_visibilities"] = object_visibilities[:, index]
     track_data["object_motions_valid"] = object_motions_valid[:, index]
-    track_data["surface_points"] = np.array(final_surface_points)
-    track_data["interior_points"] = np.array(final_interior_points)
+    if SHAPE_COMPLETION:
+        track_data["surface_points"] = np.array(final_surface_points)
+        track_data["interior_points"] = np.array(final_interior_points)
 
     return track_data
 
