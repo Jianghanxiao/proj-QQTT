@@ -1,3 +1,6 @@
+# Merge the RGB-D data from multiple cameras into a single point cloud in world coordinate
+# Do some depth filtering to make the point cloud more clean
+
 import numpy as np
 import open3d as o3d
 import json
@@ -6,8 +9,8 @@ import cv2
 from tqdm import tqdm
 import os
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/real_collect"
-case_name = "test"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
+case_name = "rope_1"
 
 
 # Use code from https://github.com/Jianghanxiao/Helper3D/blob/master/open3d_RGBD/src/camera/cameraHelper.py
