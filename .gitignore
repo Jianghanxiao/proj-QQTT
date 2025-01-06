@@ -11,6 +11,7 @@ past*
 deprecated/
 *.npz
 test_code/
+co-tracker/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

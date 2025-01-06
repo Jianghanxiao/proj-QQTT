@@ -9,9 +9,13 @@ import glob
 import pickle
 import matplotlib.pyplot as plt
 import trimesh
+from argparse import ArgumentParser
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
-case_name = "rope_1"
+parser = ArgumentParser()
+parser.add_argument("--case_name", type=str, default="rope_1")
+args = parser.parse_args()
+case_name = args.case_name
 # TODO: Need to manually adjust the following parameters
 num_surface_points = 1024
 volume_sample_size = 0.005
@@ -87,7 +91,7 @@ def process_unique_points(track_data):
         all_points = object_points[0][index]
     all_pcd = o3d.geometry.PointCloud()
     all_pcd.points = o3d.utility.Vector3dVector(all_points)
-    o3d.visualization.draw_geometries([all_pcd])
+    # o3d.visualization.draw_geometries([all_pcd])
 
     track_data.pop("object_points")
     track_data.pop("object_colors")

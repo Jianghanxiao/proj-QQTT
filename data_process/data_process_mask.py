@@ -8,9 +8,13 @@ import os
 import glob
 import cv2
 import pickle
+from argparse import ArgumentParser
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
-case_name = "rope_1"
+parser = ArgumentParser()
+parser.add_argument("--case_name", type=str, default="rope_1")
+args = parser.parse_args()
+case_name = args.case_name
 OBJECT_NAME = "twine"
 CONTROLLER_NAME = "hand"
 

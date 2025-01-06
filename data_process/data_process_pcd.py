@@ -10,7 +10,7 @@ from tqdm import tqdm
 import os
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
-case_name = "rope_1"
+case_name = "rope_29"
 
 
 # Use code from https://github.com/Jianghanxiao/Helper3D/blob/master/open3d_RGBD/src/camera/cameraHelper.py
