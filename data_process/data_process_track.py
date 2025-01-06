@@ -337,36 +337,50 @@ def get_final_track_data(track_data, controller_threhsold=0.01):
         all_indices.extend(idx)
 
     # Convert to numpy arrays for easier manipulation
-    all_distances = np.array(all_distances)
+    # Distances are squared, so take the square root
+    all_distances = np.array(all_distances) ** 0.5
     all_indices = np.array(all_indices)
 
     dist_mask = all_distances < controller_threhsold
     all_distances = all_distances[dist_mask]
     all_indices = all_indices[dist_mask]
 
-    # import pdb
-    # pdb.set_trace()
+    # Get the unique indices of the valid controller points
+    valid_indices = np.unique(all_indices)
+    assert len(valid_indices) > 10
 
-    # Get the unique indices of the 10 nearest controller points
-    sorted_indices = np.argsort(all_distances)
-    sorted_all_indices = all_indices[sorted_indices]
+    # Do farthest point sampling on the valid controller points to select the final controller points
+    points_map = {}
+    sample_points = []
+    for i in valid_indices:
+        points_map[tuple(new_controller_points[0, i])] = i
+        sample_points.append(new_controller_points[0, i])
+    sample_points = np.array(sample_points)
+    sample_pcd = o3d.geometry.PointCloud()
+    sample_pcd.points = o3d.utility.Vector3dVector(sample_points)
+    fps_pcd = sample_pcd.farthest_point_down_sample(10)
+    final_indices = []
+    for point in fps_pcd.points:
+        final_indices.append(points_map[tuple(point)])
 
-    # Get the top 100 indices
-    top_100_indices = sorted_all_indices[:100]
-    top_indices = np.unique(top_100_indices)
-    print(f"Controller Point Number: {len(top_indices)}")
+    print(f"Controller Point Number: {len(final_indices)}")
 
     # Get the nearest controller points and their colors
-    nearest_controller_points = new_controller_points[:, top_indices]
+    nearest_controller_points = new_controller_points[:, final_indices]
 
     # object_pcd = o3d.geometry.PointCloud()
     # object_pcd.points = o3d.utility.Vector3dVector(valid_object_points)
-    # object_pcd.colors = o3d.utility.Vector3dVector(object_colors[0][np.where(object_motions_valid[0])])
+    # object_pcd.colors = o3d.utility.Vector3dVector(
+    #     object_colors[0][np.where(object_motions_valid[0])]
+    # )
     # controller_meshes = []
     # for j in range(nearest_controller_points.shape[1]):
     #     origin = nearest_controller_points[0, j]
     #     origin_color = [1, 0, 0]
-    #     controller_meshes.append(getSphereMesh(origin, color=origin_color, radius=0.005))
+    #     controller_meshes.append(
+    #         getSphereMesh(origin, color=origin_color, radius=0.005)
+    #     )
+    # o3d.visualization.draw_geometries([object_pcd])
     # o3d.visualization.draw_geometries([object_pcd] + controller_meshes)
 
     track_data.pop("controller_points")
@@ -447,10 +461,6 @@ if __name__ == "__main__":
 
     # Filter the track data using the semantic mask of object and controller
     track_data = filter_track(track_path, pcd_path, mask_path, frame_num, num_cam)
-    # with open(f"test.pkl", "wb") as f:
-    #     pickle.dump(track_data, f)
-    # with open(f"test.pkl", "rb") as f:
-    #     track_data = pickle.load(f)
     # Filter motion
     track_data = filter_motion(track_data)
     # # Save the filtered track data
