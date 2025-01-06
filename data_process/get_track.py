@@ -14,6 +14,7 @@ parser = ArgumentParser()
 parser.add_argument("--case_name", type=str, default="rope_1")
 args = parser.parse_args()
 case_name = args.case_name
+print(f"Processing {case_name}")
 num_cam = len(glob.glob(f"{base_path}/{case_name}/depth/*"))
 device = "cuda"
 

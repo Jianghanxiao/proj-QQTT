@@ -7,11 +7,11 @@ num_cameras = 3
 output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/rope_variants"
-case_name = "rope_29"
+case_name = "rope_0"
 calibrate_path = f"{base_path}/{case_name}/calibrate.pkl"
 # Need to manually control this for each video to cut (based on camera 0 always)
-start_step = 251
-end_step = 434
+start_step = 1080
+end_step = 1343
 
 FPS = 30
 

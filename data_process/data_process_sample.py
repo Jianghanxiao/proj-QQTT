@@ -16,6 +16,7 @@ parser = ArgumentParser()
 parser.add_argument("--case_name", type=str, default="rope_1")
 args = parser.parse_args()
 case_name = args.case_name
+print(f"Processing {case_name}")
 # TODO: Need to manually adjust the following parameters
 num_surface_points = 1024
 volume_sample_size = 0.005

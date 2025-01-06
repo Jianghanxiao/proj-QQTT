@@ -8,9 +8,14 @@ import pickle
 import cv2
 from tqdm import tqdm
 import os
+from argparse import ArgumentParser
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
-case_name = "rope_29"
+parser = ArgumentParser()
+parser.add_argument("--case_name", type=str, default="rope_1")
+args = parser.parse_args()
+case_name = args.case_name
+print(f"Processing {case_name}")
 
 
 # Use code from https://github.com/Jianghanxiao/Helper3D/blob/master/open3d_RGBD/src/camera/cameraHelper.py
