@@ -16,6 +16,8 @@ from pytorch3d.ops import iterative_closest_point
 from pytorch3d.transforms import Transform3d
 from kornia import create_meshgrid
 import open3d as o3d
+from plyfile import PlyData, PlyElement
+from rotation_utils import quaternion_multiply, matrix_to_quaternion
 
 # Set up environment variables
 os.environ["PYOPENGL_PLATFORM"] = "egl"
@@ -277,6 +279,7 @@ def get_bbox(img):
 def estimate_pose(
     mesh_file: str,
     pcd_file: str,
+    gs_file: str,
     raw_img_path: str,
     mask_img: np.ndarray,
     mask_box: tuple,
@@ -293,6 +296,7 @@ def estimate_pose(
     Args:
         mesh_file (str): Path to the reconstructed mesh file
         pcd_file (str): Path to the unprojected point cloud file
+        gs_file (str): Path to the Gaussians file
         raw_img_path (str): Path to the original color image
         mask_img (np.ndarray): Mask image to filter the raw image
         mask_box (tuple): Bounding box of the mask in the raw image (x1, y1, x2, y2)
@@ -492,7 +496,14 @@ def estimate_pose(
     M = offset_mat @ trans_mat @ scale_mat
     print("final transformation:", np.array2string(M, separator=', '))
 
-    # transform the original mesh using the final transformation
+    # save transformation matrix as .npy
+    trans_result = {
+        'matrix': M,
+        'scale': majority_scale
+    }
+    np.save(os.path.join(out_dir, 'trans_final.npy'), trans_result)
+
+    # transform the original mesh using the final matrix (via vertices transform)
     vert_orig = np.array(mesh.vertices, dtype=np.float64)
     vert_orig = np.hstack((vert_orig, np.ones((vert_orig.shape[0], 1))))
     vert_trans = vert_orig @ M.T
@@ -504,7 +515,91 @@ def estimate_pose(
     final_mesh = trimesh.Trimesh(**final_mesh_data)
     final_mesh.export(os.path.join(out_dir, 'final.ply'))
 
-    return M
+    # transform the original mesh using the final matrix (via trimesh apply_transform)
+    mesh.apply_transform(M)
+    mesh.export(os.path.join(out_dir, 'final_trimesh.glb'))
+
+    # transform the 3d gaussians using the final matrix
+    gs_data = load_gs(gs_file)
+    new_gs_data = transform_gs(gs_data, M, majority_scale)
+    save_gs(new_gs_data, os.path.join(out_dir, 'final_gs.ply'))
+
+    return M, majority_scale
+
+
+def load_gs(gs_file):
+    plydata = PlyData.read(gs_file)
+    xyz = np.stack((np.asarray(plydata.elements[0]["x"]),
+                        np.asarray(plydata.elements[0]["y"]),
+                        np.asarray(plydata.elements[0]["z"])),  axis=1)
+    opacities = np.asarray(plydata.elements[0]["opacity"])[..., np.newaxis]
+    features_dc = np.zeros((xyz.shape[0], 3, 1))
+    features_dc[:, 0, 0] = np.asarray(plydata.elements[0]["f_dc_0"])
+    features_dc[:, 1, 0] = np.asarray(plydata.elements[0]["f_dc_1"])
+    features_dc[:, 2, 0] = np.asarray(plydata.elements[0]["f_dc_2"])
+    scales = np.zeros((xyz.shape[0], 3))
+    scales[:, 0] = np.asarray(plydata.elements[0]["scale_0"])
+    scales[:, 1] = np.asarray(plydata.elements[0]["scale_1"])
+    scales[:, 2] = np.asarray(plydata.elements[0]["scale_2"])
+    rots = np.zeros((xyz.shape[0], 4))
+    rots[:, 0] = np.asarray(plydata.elements[0]["rot_0"])
+    rots[:, 1] = np.asarray(plydata.elements[0]["rot_1"])
+    rots[:, 2] = np.asarray(plydata.elements[0]["rot_2"])
+    rots[:, 3] = np.asarray(plydata.elements[0]["rot_3"])
+    gs_data = {
+        'xyz': xyz,
+        'opacities': opacities,
+        'features_dc': features_dc,
+        'scales': scales,
+        'rots': rots
+    }
+    return gs_data
+
+
+def save_gs(gs_data, gs_file_path):
+    xyz = gs_data['xyz']
+    normals = np.zeros_like(xyz)
+    f_dc = gs_data['features_dc'].squeeze()
+    opacities = gs_data['opacities']
+    scale = gs_data['scales']
+    rotation = gs_data['rots']
+    list_of_attributes = [
+        'x', 'y', 'z', 'nx', 'ny', 'nz',
+        'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 
+        'scale_0', 'scale_1', 'scale_2', 
+        'rot_0', 'rot_1', 'rot_2', 'rot_3'
+    ]
+    dtype_full = [(attribute, 'f4') for attribute in list_of_attributes]
+    elements = np.empty(xyz.shape[0], dtype=dtype_full)
+    attributes = np.concatenate((xyz, normals, f_dc, opacities, scale, rotation), axis=1)
+    elements[:] = list(map(tuple, attributes))
+    el = PlyElement.describe(elements, 'vertex')
+    PlyData([el]).write(gs_file_path)
+
+
+def transform_gs(gs_data, M, majority_scale):
+    M_align = np.eye(4)   # used for aligning 3dgs with mesh
+    M_align[1, 1] = -1
+    M_align[2, 2] = -1
+    x_axis_rot = torch.Tensor(M_align[:3, :3])
+    rot = torch.Tensor(M[:3, :3])
+    new_xyz = gs_data['xyz'].copy()
+    new_xyz = np.hstack((new_xyz, np.ones((new_xyz.shape[0], 1))))
+    new_xyz = new_xyz @ M_align.T
+    new_xyz = new_xyz @ M.T
+    new_rotation = torch.Tensor(gs_data['rots'].copy())
+    new_rotation = quaternion_multiply(matrix_to_quaternion(x_axis_rot), new_rotation)
+    new_rotation = quaternion_multiply(matrix_to_quaternion(rot), new_rotation)
+    new_scales = gs_data['scales'].copy()
+    new_scales += np.log(majority_scale)
+    new_gs_data = {
+        'xyz': new_xyz[:, :3],
+        'opacities': gs_data['opacities'],
+        'features_dc': gs_data['features_dc'],
+        'scales': new_scales,
+        'rots': new_rotation.numpy()
+    }
+    return new_gs_data
 
 
 if __name__ == "__main__":
@@ -513,8 +608,9 @@ if __name__ == "__main__":
     mask_img_path = '/home/haoyuyh3/Documents/maxhsu/qqtt/data-3dgs/rope_double_hand/mask/0/1/0.png'
     raw_img_path = '/home/haoyuyh3/Documents/maxhsu/qqtt/data-3dgs/rope_double_hand/color/0/0.png'
     depth_path = '/home/haoyuyh3/Documents/maxhsu/qqtt/data-3dgs/rope_double_hand/depth/0/0.npy'
-    pcd_file = '/home/haoyuyh3/Documents/maxhsu/qqtt/data-3dgs/rope_double_hand/pcd/0/first_frame_object.npz'
-    mesh_file = '/home/haoyuyh3/Documents/maxhsu/qqtt/mesh-recon/TRELLIS/output/rope_double_hand/sample.glb'
+    pcd_file = '/home/haoyuyh3/Documents/maxhsu/qqtt/data-3dgs/rope_double_hand/pcd/0/first_frame_object.npz'   # GT RGBD sensor output
+    mesh_file = '/home/haoyuyh3/Documents/maxhsu/qqtt/mesh-recon/TRELLIS/output/rope_double_hand/sample.glb'    # TRELLIS reconstructed mesh
+    gs_file = '/home/haoyuyh3/Documents/maxhsu/qqtt/mesh-recon/TRELLIS/output/rope_double_hand/sample.ply'      # TRELLIS reconstructed gaussians
     metadata_file = '/home/haoyuyh3/Documents/maxhsu/qqtt/data-3dgs/rope_double_hand/metadata.json'
     calibration_file = '/home/haoyuyh3/Documents/maxhsu/qqtt/data-3dgs/rope_double_hand/calibrate.pkl'
     output_dir = './output'
@@ -532,8 +628,8 @@ if __name__ == "__main__":
     mask_box = get_bbox(mask_img)
     print("Mask bounding box:", mask_box)
 
-    # Estimate pose
-    M = estimate_pose(
-        mesh_file, pcd_file, raw_img_path, mask_img, mask_box, output_dir, intrinsic, w2c, depth_path,
+    # Estimate pose & make transformation
+    M, scale = estimate_pose(
+        mesh_file, pcd_file, gs_file, raw_img_path, mask_img, mask_box, output_dir, intrinsic, w2c, depth_path,
         num_samples=8, num_ups=1
     )
