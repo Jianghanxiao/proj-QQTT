@@ -10,7 +10,8 @@ import pickle
 import matplotlib.pyplot as plt
 from argparse import ArgumentParser
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
+# base_path = "/data/proj-qqtt/processed_data/rope_variants"
 parser = ArgumentParser()
 parser.add_argument("--case_name", type=str, default="rope_1")
 args = parser.parse_args()
@@ -322,35 +323,9 @@ def get_final_track_data(track_data, controller_threhsold=0.01):
     mask = track_data["controller_mask"]
 
     new_controller_points = controller_points[:, np.where(mask)[0], :]
-    # Locate the 10 nearest controller points to the object points in the first frame
-    valid_object_points = object_points[0][np.where(object_motions_valid[0])]
-    controller_pcd = o3d.geometry.PointCloud()
-    controller_pcd.points = o3d.utility.Vector3dVector(new_controller_points[0])
-    kdtree = o3d.geometry.KDTreeFlann(controller_pcd)
-    # Prepare arrays to store distances and corresponding indices
-    all_distances = []
-    all_indices = []
-
-    # Iterate over all valid object points to find their nearest neighbors among controller points
-    for point in tqdm(valid_object_points):
-        [k, idx, dists] = kdtree.search_knn_vector_3d(point, 10)
-        all_distances.extend(dists)
-        all_indices.extend(idx)
-
-    # Convert to numpy arrays for easier manipulation
-    # Distances are squared, so take the square root
-    all_distances = np.array(all_distances) ** 0.5
-    all_indices = np.array(all_indices)
-
-    dist_mask = all_distances < controller_threhsold
-    all_distances = all_distances[dist_mask]
-    all_indices = all_indices[dist_mask]
-
-    # Get the unique indices of the valid controller points
-    valid_indices = np.unique(all_indices)
-    assert len(valid_indices) > 10
-
+    assert len(new_controller_points[0]) >= 30
     # Do farthest point sampling on the valid controller points to select the final controller points
+    valid_indices = np.arange(len(new_controller_points[0]))
     points_map = {}
     sample_points = []
     for i in valid_indices:
@@ -359,7 +334,7 @@ def get_final_track_data(track_data, controller_threhsold=0.01):
     sample_points = np.array(sample_points)
     sample_pcd = o3d.geometry.PointCloud()
     sample_pcd.points = o3d.utility.Vector3dVector(sample_points)
-    fps_pcd = sample_pcd.farthest_point_down_sample(10)
+    fps_pcd = sample_pcd.farthest_point_down_sample(30)
     final_indices = []
     for point in fps_pcd.points:
         final_indices.append(points_map[tuple(point)])

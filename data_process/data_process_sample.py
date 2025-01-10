@@ -10,8 +10,10 @@ import pickle
 import matplotlib.pyplot as plt
 import trimesh
 from argparse import ArgumentParser
+import copy
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
+# base_path = "/data/proj-qqtt/processed_data/rope_variants"
 parser = ArgumentParser()
 parser.add_argument("--case_name", type=str, default="rope_1")
 args = parser.parse_args()
@@ -21,7 +23,8 @@ print(f"Processing {case_name}")
 num_surface_points = 1024
 volume_sample_size = 0.005
 # When processing for the rope data, this can be False
-SHAPE_COMPLETION = False
+SHAPE_COMPLETION = True
+
 
 def getSphereMesh(center, radius=0.1, color=[0, 0, 0]):
     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius).translate(center)
@@ -43,17 +46,40 @@ def process_unique_points(track_data):
     object_colors = object_colors[:, unique_idx, :]
     object_visibilities = object_visibilities[:, unique_idx]
     object_motions_valid = object_motions_valid[:, unique_idx]
-    
+
     if SHAPE_COMPLETION:
         # Do the shape completion for the first frame object points
         object_pcd = o3d.geometry.PointCloud()
         object_pcd.points = o3d.utility.Vector3dVector(object_points[0])
         alpha = 0.03
-        mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(object_pcd, alpha)
+        mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(
+            object_pcd, alpha
+        )
         mesh.compute_vertex_normals()
         o3d.visualization.draw_geometries([object_pcd, mesh])
+
+        # radii = [0.005, 0.01, 0.02, 0.04]
+        # object_pcd.estimate_normals(
+        #     search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=30)
+        # )
+        # rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+        #     object_pcd, o3d.utility.DoubleVector(radii)
+        # )
+        # rec_mesh.compute_vertex_normals()
+        # o3d.visualization.draw_geometries([object_pcd, rec_mesh])
+
+        # mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        #     object_pcd, depth=9
+        # )
+        # mesh.compute_vertex_normals()
+        # o3d.visualization.draw_geometries([object_pcd, mesh])
+        import pdb
+
+        pdb.set_trace()
         # Sample the surface points
-        surface_pcd_sampled = mesh.sample_points_poisson_disk(number_of_points=num_surface_points)
+        surface_pcd_sampled = mesh.sample_points_poisson_disk(
+            number_of_points=num_surface_points
+        )
         surface_points = np.asarray(surface_pcd_sampled.points)
         # Sample the interior points
         vertices = np.asarray(mesh.vertices)
@@ -62,7 +88,9 @@ def process_unique_points(track_data):
         interior_points = trimesh.sample.volume_mesh(trimesh_mesh, 10000)
 
     if SHAPE_COMPLETION:
-        all_points = np.concatenate([surface_points, interior_points, object_points[0]], axis=0)
+        all_points = np.concatenate(
+            [surface_points, interior_points, object_points[0]], axis=0
+        )
     else:
         all_points = object_points[0]
     # Do the volume sampling for the object points, prioritize the original object points, then surface points, then interior points
@@ -70,24 +98,37 @@ def process_unique_points(track_data):
     index = []
     grid_flag = {}
     for i in range(object_points.shape[1]):
-        grid_index = tuple(np.floor((object_points[0, i] - min_bound) / volume_sample_size).astype(int))
+        grid_index = tuple(
+            np.floor((object_points[0, i] - min_bound) / volume_sample_size).astype(int)
+        )
         if grid_index not in grid_flag:
             grid_flag[grid_index] = 1
             index.append(i)
     if SHAPE_COMPLETION:
         final_surface_points = []
         for i in range(surface_points.shape[0]):
-            grid_index = tuple(np.floor((surface_points[i] - min_bound) / volume_sample_size).astype(int))
+            grid_index = tuple(
+                np.floor((surface_points[i] - min_bound) / volume_sample_size).astype(
+                    int
+                )
+            )
             if grid_index not in grid_flag:
                 grid_flag[grid_index] = 1
                 final_surface_points.append(surface_points[i])
         final_interior_points = []
         for i in range(interior_points.shape[0]):
-            grid_index = tuple(np.floor((interior_points[i] - min_bound) / volume_sample_size).astype(int))
+            grid_index = tuple(
+                np.floor((interior_points[i] - min_bound) / volume_sample_size).astype(
+                    int
+                )
+            )
             if grid_index not in grid_flag:
                 grid_flag[grid_index] = 1
                 final_interior_points.append(interior_points[i])
-        all_points = np.concatenate([final_surface_points, final_interior_points, object_points[0][index]], axis=0)
+        all_points = np.concatenate(
+            [final_surface_points, final_interior_points, object_points[0][index]],
+            axis=0,
+        )
     else:
         all_points = object_points[0][index]
     all_pcd = o3d.geometry.PointCloud()

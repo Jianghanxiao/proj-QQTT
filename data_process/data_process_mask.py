@@ -10,13 +10,13 @@ import cv2
 import pickle
 from argparse import ArgumentParser
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
 parser = ArgumentParser()
 parser.add_argument("--case_name", type=str, default="rope_1")
 args = parser.parse_args()
 case_name = args.case_name
 print(f"Processing {case_name}")
-OBJECT_NAME = "twine"
+OBJECT_NAME = "frog"
 CONTROLLER_NAME = "hand"
 
 processed_masks = {}
@@ -160,7 +160,11 @@ if __name__ == "__main__":
             data = json.load(f)
         mask_info[i] = {}
         for key, value in data.items():
-            if value == OBJECT_NAME:
+            if value != CONTROLLER_NAME:
+                if "object" in mask_info[i]:
+                    # TODO: Handle the case when there are multiple objects
+                    import pdb
+                    pdb.set_trace()
                 mask_info[i]["object"] = int(key)
             if value == CONTROLLER_NAME:
                 if "controller" in mask_info[i]:

@@ -4,14 +4,14 @@ import os
 import json
 
 num_cameras = 3
-output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants"
+output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/rope_variants"
-case_name = "rope_0"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/different_types"
+case_name = "weird_package"
 calibrate_path = f"{base_path}/{case_name}/calibrate.pkl"
 # Need to manually control this for each video to cut (based on camera 0 always)
-start_step = 1080
-end_step = 1343
+start_step = 1777
+end_step = 1815
 
 FPS = 30
 
