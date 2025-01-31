@@ -23,7 +23,7 @@ print(f"Processing {case_name}")
 num_surface_points = 1024
 volume_sample_size = 0.005
 # When processing for the rope data, this can be False
-SHAPE_COMPLETION = True
+SHAPE_COMPLETION = False
 
 
 def getSphereMesh(center, radius=0.1, color=[0, 0, 0]):
@@ -133,7 +133,11 @@ def process_unique_points(track_data):
         all_points = object_points[0][index]
     all_pcd = o3d.geometry.PointCloud()
     all_pcd.points = o3d.utility.Vector3dVector(all_points)
-    # o3d.visualization.draw_geometries([all_pcd])
+    # coorindate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+    # o3d.visualization.draw_geometries([all_pcd, coorindate])
+
+    # Make sure all points are above the ground
+    object_points[object_points[..., 2] > 0, 2] = 0
 
     track_data.pop("object_points")
     track_data.pop("object_colors")
@@ -146,6 +150,9 @@ def process_unique_points(track_data):
     if SHAPE_COMPLETION:
         track_data["surface_points"] = np.array(final_surface_points)
         track_data["interior_points"] = np.array(final_interior_points)
+    else:
+        track_data["surface_points"] = np.zeros((0, 3))
+        track_data["interior_points"] = np.zeros((0, 3))
 
     return track_data
 

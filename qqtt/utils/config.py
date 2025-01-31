@@ -36,6 +36,7 @@ class Config:
         self.collision_dist = 0.06
         # Parameters on whether update the collision parameters
         self.collision_learn = True
+        self.self_collision = False
 
         # DEBUG mode: set use_graph to False
         self.use_graph = True

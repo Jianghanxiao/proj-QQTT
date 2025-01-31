@@ -40,6 +40,22 @@ def demo_real():
     # trainer.test("/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments/debug_warp/train/iter_0.pth")
 
 
+def demo_cloth():
+    cfg.load_from_yaml("configs/cloth.yaml")
+    print(f"[DATA TYPE]: {cfg.data_type}")
+
+    # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # base_dir = f"experiments/{current_time}"
+    base_dir = f"experiments/cloth_no_shape_completion_3e4_0.02_30_more_radius_self_collision_0.02"
+
+    logger.set_log_file(path=base_dir, name="inv_phy_log")
+    trainer = InvPhyTrainerWarp(
+        data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types/single_lift_cloth/final_data.pkl",
+        base_dir=base_dir,
+    )
+    trainer.train()
+
+
 def demo_multiple_k():
     cfg.load_from_yaml("configs/synthetic.yaml")
     print(f"[DATA TYPE]: {cfg.data_type}")
@@ -78,6 +94,7 @@ def demo_billiard():
 
 
 if __name__ == "__main__":
-    demo_real()
+    # demo_real()
     # demo_multiple_k()
     # demo_billiard()
+    demo_cloth()

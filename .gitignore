@@ -12,6 +12,9 @@ deprecated/
 *.npz
 test_code/
 co-tracker/
+test_output/
+data_process/weights/
+data_process/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

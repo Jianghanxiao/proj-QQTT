@@ -2,7 +2,7 @@
 
 # ENV setup
 ```
-conda create -n qqtt python=3.10
+conda create -n qqtt python=3.8
 conda activate qqtt
 pip install warp-lang
 pip install usd-core matplotlib pyglet
@@ -20,6 +20,7 @@ pip install wandb
 pip install moviepy imageio
 conda install -c conda-forge opencv 
 pip install cma
+conda install pytorch3d -c pytorch3d
 ```
 
 The env for cameras:

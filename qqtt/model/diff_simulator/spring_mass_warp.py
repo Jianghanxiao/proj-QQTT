@@ -594,6 +594,7 @@ class SpringMassSystemWarp:
         gt_object_points=None,
         gt_object_visibilities=None,
         gt_object_motions_valid=None,
+        self_collision=False,
     ):
         logger.info(f"[SIMULATION]: Initialize the Spring-Mass System")
         self.device = cfg.device
@@ -641,12 +642,20 @@ class SpringMassSystemWarp:
         if init_masks is not None:
             if torch.unique(init_masks).shape[0] > 1:
                 self.object_collision_flag = 1
+
+        if self_collision:
+            assert init_masks is None
+            self.object_collision_flag = 1
+            # Make all points as the collision points
+            init_masks = torch.arange(self.n_vertices, dtype=torch.int32, device=self.device)   
+
+        if self.object_collision_flag:
             self.wp_masks = wp.from_torch(
                 init_masks[:num_object_points].int(),
                 dtype=wp.int32,
                 requires_grad=False,
             )
-        if self.object_collision_flag:
+            
             self.collision_grid = wp.HashGrid(128, 128, 128)
             self.collision_dist = collision_dist
 

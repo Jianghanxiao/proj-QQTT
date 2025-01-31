@@ -105,6 +105,7 @@ class InvPhyTrainerWarp:
             gt_object_points=self.object_points,
             gt_object_visibilities=self.object_visibilities,
             gt_object_motions_valid=self.object_motions_valid,
+            self_collision=cfg.self_collision,
         )
 
         self.optimizer = torch.optim.Adam(
@@ -122,7 +123,7 @@ class InvPhyTrainerWarp:
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
-                project="test",
+                project="real_test",
                 name=cfg.run_name,
                 config=cfg.to_dict(),
             )
