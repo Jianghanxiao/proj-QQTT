@@ -15,6 +15,11 @@ co-tracker/
 test_output/
 data_process/weights/
 data_process/
+*.png
+test_output*
+test_superglue*
+test_enhance*
+test_cases/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

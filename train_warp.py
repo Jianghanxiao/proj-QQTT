@@ -55,6 +55,22 @@ def demo_cloth():
     )
     trainer.train()
 
+def demo_package():
+    cfg.load_from_yaml("configs/cloth.yaml")
+    print(f"[DATA TYPE]: {cfg.data_type}")
+
+    # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # base_dir = f"experiments/{current_time}"
+    base_dir = f"experiments/debug_package"
+    # cfg.init_spring_Y = 3e4
+    # cfg.radius = 0.02
+    # cfg.max_neighbours = 30
+    logger.set_log_file(path=base_dir, name="inv_phy_log")
+    trainer = InvPhyTrainerWarp(
+        data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types/weird_package/final_data.pkl",
+        base_dir=base_dir,
+    )
+    trainer.train()
 
 def demo_multiple_k():
     cfg.load_from_yaml("configs/synthetic.yaml")
@@ -97,4 +113,5 @@ if __name__ == "__main__":
     # demo_real()
     # demo_multiple_k()
     # demo_billiard()
-    demo_cloth()
+    # demo_cloth()
+    demo_package()
