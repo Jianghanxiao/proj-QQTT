@@ -2,7 +2,7 @@
 
 # ENV setup
 ```
-conda create -n qqtt python=3.8
+conda create -n qqtt python=3.10
 conda activate qqtt
 pip install warp-lang
 pip install usd-core matplotlib pyglet
@@ -12,7 +12,7 @@ pip install trimesh
 
 The env for inverse physics
 ```
-conda install pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 pytorch-cuda=11.8 -c pytorch -c nvidia
+conda install pytorch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 pytorch-cuda=12.1 -c pytorch -c nvidia
 pip install stannum
 pip install termcolor
 pip install fvcore
@@ -29,6 +29,45 @@ pip install Cython
 pip install pyrealsense2
 pip install atomics
 pip install pynput
+```
+
+The env for GroundedSAM2
+```
+pip install git+https://github.com/IDEA-Research/Grounded-SAM-2.git
+pip install git+https://github.com/IDEA-Research/GroundingDINO.git
+```
+
+The env for SDXL
+```
+pip install diffusers
+```
+
+The env for trellis
+```
+cd data_process
+git clone --recurse-submodules https://github.com/microsoft/TRELLIS.git
+cd TRELLIS
+. ./setup.sh --basic --xformers --flash-attn --diffoctreerast --spconv --mipgaussian --kaolin --nvdiffrast
+
+```
+
+# Download the checkpoints for GroundedSAM2
+```
+mkdir data_process/groundedSAM_checkpoints
+cd data_process/groundedSAM_checkpoints
+wget ./data_process/groundedSAM_checkpoints/
+wget https://github.com/IDEA-Research/GroundingDINO/blob/main/groundingdino/config/GroundingDINO_SwinT_OGC.py
+wget https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt
+wget https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth
+```
+
+# Download the checkpoints for superglue
+```
+mkdir data_process/models/weights
+cd data_process/models/weights
+wget https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/models/weights/superglue_indoor.pth
+wget https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/models/weights/superglue_outdoor.pth
+wget https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/models/weights/superpoint_v1.pth
 ```
 
 # Record data

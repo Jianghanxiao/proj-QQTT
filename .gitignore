@@ -18,7 +18,10 @@ test_output*
 test_superglue*
 test_enhance*
 test_cases/
-data_process/models/test_weights/
+data_process/models/weights/
+data_process/groundedSAM_checkpoints/
+real_data/
+data_process/TRELLIS
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
