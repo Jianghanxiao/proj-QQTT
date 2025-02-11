@@ -10,7 +10,7 @@ args = parser.parse_args()
 case_name = args.case_name
 print(f"Processing {case_name}")
 TEXT_PROMPT = "twine.hand"
-camera_num = 1
+camera_num = 3
 
 for camera_idx in range(camera_num):
     print(f"python real_usage.py --base_path {base_path} --case_name {case_name} --TEXT_PROMPT {TEXT_PROMPT} --camera_idx {camera_idx}")
