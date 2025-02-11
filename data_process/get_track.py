@@ -2,7 +2,7 @@
 
 import torch
 import imageio.v3 as iio
-from cotracker.utils.visualizer import Visualizer
+from utils.visualizer import Visualizer
 import glob
 import cv2
 import numpy as np

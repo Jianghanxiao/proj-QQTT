@@ -46,7 +46,7 @@ def demo_cloth():
 
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
-    base_dir = f"experiments/debug_cloth_no_shape_completion_3e4_0.02_30_more_radius_self_collision_0.02"
+    base_dir = f"experiments/debug_test_cloth_no_shape_completion_3e4_0.02_30_more_radius_self_collision_0.02"
     # cfg.init_spring_Y = 3e3
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainerWarp(
@@ -113,5 +113,5 @@ if __name__ == "__main__":
     # demo_real()
     # demo_multiple_k()
     # demo_billiard()
-    # demo_cloth()
-    demo_package()
+    demo_cloth()
+    # demo_package()

@@ -31,13 +31,6 @@ pip install atomics
 pip install pynput
 ```
 
-The env for co-tracker:
-```
-git clone https://github.com/facebookresearch/co-tracker
-cd co-tracker
-pip install -e .
-```
-
 # Record data
 Set the footswitch button
 ```
