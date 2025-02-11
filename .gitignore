@@ -18,6 +18,7 @@ test_output*
 test_superglue*
 test_enhance*
 test_cases/
+data_process/models/test_weights/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
