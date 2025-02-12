@@ -21,12 +21,17 @@ python record_data.py
 ```
 
 # Process the data
+This one use the base environment, the ffmpeg has some version conflict issue. This is okay for now, the released data doesn't need call this env
 ```
-python data_process/record_data_align.py
-python data_process/data_process_pcd.py
+python data_process/record_data_align.py --case_name [] --start [] --end []
+```
+After this step, the data includes the color (frames and video), depth, calibrate.pkl and metadata.json (Should also be the realeas of our data, about 500 MB)
 
-# Get the masks from GroundedSAM2 (Go to GroundedSAM2 repo)
+```
+# Get the masks from GroundedSAM2
 python test_real.py 
+
+python data_process/data_process_pcd.py
 # Process the semantic mask to deprecate the points with bad depth
 python data_process/data_process_mask.py
 # Get the track data from CoTracker

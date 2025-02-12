@@ -25,6 +25,7 @@ pip install git+https://github.com/IDEA-Research/GroundingDINO.git
 
 # Install the env for image upscaler using SDXL
 pip install diffusers
+pip install accelerate
 
 # Install the env for trellis
 cd data_process

@@ -2,18 +2,37 @@
 # Cut the frames and align the data, and create the video for each camera with the fps 30
 import os
 import json
+from argparse import ArgumentParser
 
 num_cameras = 3
-output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/different_types"
-case_name = "weird_package"
+parser = ArgumentParser()
+parser.add_argument(
+    "--base_path",
+    type=str,
+    default="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/different_types",
+)
+parser.add_argument("--case_name", type=str)
+parser.add_argument(
+    "--output_path",
+    type=str,
+    default="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types",
+)
+parser.add_argument("--start", type=int)
+parser.add_argument("--end", type=int)
+args = parser.parse_args()
+
+base_path = args.base_path
+case_name = args.case_name
+output_path = args.output_path
+start_step = args.start
+end_step = args.end
+
 calibrate_path = f"{base_path}/{case_name}/calibrate.pkl"
-# Need to manually control this for each video to cut (based on camera 0 always)
-start_step = 1777
-end_step = 1815
+
 
 FPS = 30
+
 
 def exist_dir(dir):
     if not os.path.exists(dir):
@@ -84,7 +103,6 @@ if __name__ == "__main__":
             )
 
     # for each camera, create a video for all frames with the fps 30
-    # Useing opencv to create the video
     for i in range(num_cameras):
         os.system(
             f"ffmpeg -r {FPS} -start_number 0 -f image2 -i {output_path}/{case_name}/color/{i}/%d.png -vcodec libx264 -crf 0  -pix_fmt yuv420p {output_path}/{case_name}/color/{i}.mp4"

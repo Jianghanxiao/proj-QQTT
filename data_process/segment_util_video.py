@@ -43,23 +43,11 @@ PROMPT_TYPE_FOR_VIDEO = "box"  # choose from ["point", "box", "mask"]
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 VIDEO_PATH = f"{base_path}/{case_name}/color/{camera_idx}.mp4"
-existDir("real_data")
-existDir(f"real_data/{case_name}")
-existDir(f"real_data/{case_name}/{camera_idx}")
+existDir(f"{base_path}/{case_name}/tmp_data")
+existDir(f"{base_path}/{case_name}/tmp_data/{case_name}")
+existDir(f"{base_path}/{case_name}/tmp_data/{case_name}/{camera_idx}")
 
-existDir("real_data")
-existDir(f"real_data/{case_name}")
-with open(f"real_data/{case_name}/config.json", "w") as f:
-    json.dump(
-        {
-            "prompt": TEXT_PROMPT,
-            "BOX_THRESHOLD": BOX_THRESHOLD,
-            "TEXT_THRESHOLD": TEXT_THRESHOLD,
-            "PROMPT_TYPE_FOR_VIDEO": PROMPT_TYPE_FOR_VIDEO,
-        },
-        f,
-    )
-SOURCE_VIDEO_FRAME_DIR = f"real_data/{case_name}/{camera_idx}"
+SOURCE_VIDEO_FRAME_DIR = f"{base_path}/{case_name}/tmp_data/{case_name}/{camera_idx}"
 
 """
 Step 1: Environment settings and model initialization for Grounding DINO and SAM 2
