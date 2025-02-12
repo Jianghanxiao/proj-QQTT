@@ -10,51 +10,30 @@ from PIL import Image
 from TRELLIS.trellis.pipelines import TrellisImageTo3DPipeline
 from TRELLIS.trellis.utils import render_utils, postprocessing_utils
 import numpy as np
-import json
 from argparse import ArgumentParser
-import pickle
-import torch
 
-def exist_dir(dir):
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+parser = ArgumentParser()
+parser.add_argument(
+    "--img_path",
+    type=str,
+)
+parser.add_argument("--output_dir", type=str)
+args = parser.parse_args()
 
+img_path = args.img_path
+output_dir = args.output_dir
 
 # Load a pipeline from a model folder or a Hugging Face model hub.
 pipeline = TrellisImageTo3DPipeline.from_pretrained("JeffreyXiang/TRELLIS-image-large")
 pipeline.cuda()
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/reference_image"
-parser = ArgumentParser()
-parser.add_argument("--case_name", type=str, default="0")
-args = parser.parse_args()
-case_name = args.case_name
-output_dir = f"{base_path}/models/{case_name}"
-
-def exist_dir(dir):
-    if not os.path.exists(dir):
-        os.makedirs(dir)
-
-exist_dir(f"{base_path}/models")
-exist_dir(output_dir)
-
-
-final_im = Image.open(f"{base_path}/{case_name}.png").convert("RGBA")
-assert not np.all(np.array(final_im)[:, :, 3]==255)
+final_im = Image.open(img_path).convert("RGBA")
+assert not np.all(np.array(final_im)[:, :, 3] == 255)
 
 # Run the pipeline
 outputs = pipeline.run(
     final_im,
-    # seed=0,
-    # Optional parameters
-    # sparse_structure_sampler_params={
-    #     "steps": 1,
-    # #     "cfg_strength": 7.5,
-    # },
-    # custom_coords=final_coords,
 )
-
-# exist_dir(output_dir)
 
 video_gs = render_utils.render_video(outputs["gaussian"][0])["color"]
 video_mesh = render_utils.render_video(outputs["mesh"][0])["normal"]
