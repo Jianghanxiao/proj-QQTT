@@ -27,7 +27,7 @@ parser.add_argument("--case_name", type=str, default="double_stretch_zebra")
 args = parser.parse_args()
 case_name = args.case_name
 print(f"Processing {case_name}")
-reference_path = "/home/hanxiao/Desktop/Research/proj-qqtt/TRELLIS/outputs_sdxl/outputs_zebra/object.glb"
+reference_path = f"{base_path}/{case_name}/shape/object.glb"
 CONTROLLER_NAME = "hand"
 
 

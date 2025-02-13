@@ -11,7 +11,7 @@ pip install wandb
 pip install moviepy imageio
 conda install -y c conda-forge opencv
 pip install cma
-conda install -y pytorch3d -c pytorch3d
+pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu121_pyt240/download.html
 
 # Install the env for realsense camera
 pip install Cython
