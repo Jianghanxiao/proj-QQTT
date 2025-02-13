@@ -1,6 +1,8 @@
 import os
 from argparse import ArgumentParser
 import time
+import logging
+import json
 
 parser = ArgumentParser()
 parser.add_argument(
@@ -14,14 +16,52 @@ parser.add_argument("--category", type=str, required=True)
 args = parser.parse_args()
 
 # Set the debug flags
-PROCESS_SHAPE_PRIOR = True
-PROCESS_SEG_TRACK = False
+PROCESS_SHAPE_PRIOR = False
+PROCESS_SEG_TRACK = True
 PROCESS_OTHER = False
 
 base_path = args.base_path
 case_name = args.case_name
 category = args.category
 TEXT_PROMPT = f"{category}.hand"
+CONTROLLER_NAME = "hand"
+
+# Get the mask path for the image
+with open(f"{base_path}/{case_name}/mask/mask_info_{0}.json", "r") as f:
+    data = json.load(f)
+obj_idx = None
+for key, value in data.items():
+    if value != CONTROLLER_NAME:
+        if obj_idx is not None:
+            raise ValueError("More than one object detected.")
+        obj_idx = int(key)
+mask_path = f"{base_path}/{case_name}/mask/0/{obj_idx}/0.png"
+
+logger = None
+
+
+def setup_logger(log_file="timer.log"):
+    global logger  # 声明全局变量
+
+    if logger is None:
+        logger = logging.getLogger("GlobalLogger")
+        logger.setLevel(logging.INFO)
+
+        # 避免重复添加 handler
+        if not logger.handlers:
+            # 创建文件 handler
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+
+            # 创建终端 handler
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(logging.Formatter("%(message)s"))
+
+            logger.addHandler(file_handler)
+            logger.addHandler(console_handler)
+
+
+setup_logger()
 
 
 def existDir(dir_path):
@@ -35,28 +75,30 @@ class Timer:
 
     def __enter__(self):
         self.start_time = time.time()
-        print(f"!!!!!!!!!!!! {self.task_name}: Processing {case_name} !!!!!!!!!!!!")
+        logger.info(
+            f"!!!!!!!!!!!! {self.task_name}: Processing {case_name} !!!!!!!!!!!!"
+        )
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         elapsed_time = time.time() - self.start_time
-        print(
+        logger.info(
             f"!!!!!!!!!!! Time for {self.task_name}: {elapsed_time:.2f} sec !!!!!!!!!!!!"
         )
 
 
 if PROCESS_SHAPE_PRIOR:
     existDir(f"{base_path}/{case_name}/shape")
-    # # Get the high-resolution of the image to prepare for the trellis generation
-    # with Timer("Image Upscale"):
-    #     os.system(
-    #         f"python ./data_process/image_upscale.py --img_path {base_path}/{case_name}/color/0/0.png --output_path {base_path}/{case_name}/shape/high_resolution.png --category {category}"
-    #     )
+    # Get the high-resolution of the image to prepare for the trellis generation
+    with Timer("Image Upscale"):
+        os.system(
+            f"python ./data_process/image_upscale.py --img_path {base_path}/{case_name}/color/0/0.png --mask_path {mask_path} --output_path {base_path}/{case_name}/shape/high_resolution.png --category {category}"
+        )
 
-    # # Get the masked image of the object
-    # with Timer("Image Segmentation"):
-    #     os.system(
-    #         f"python ./data_process/segment_util_image.py --img_path {base_path}/{case_name}/shape/high_resolution.png --TEXT_PROMPT {category} --output_path {base_path}/{case_name}/shape/masked_image.png"
-    #     )
+    # Get the masked image of the object
+    with Timer("Image Segmentation"):
+        os.system(
+            f"python ./data_process/segment_util_image.py --img_path {base_path}/{case_name}/shape/high_resolution.png --TEXT_PROMPT {category} --output_path {base_path}/{case_name}/shape/masked_image.png"
+        )
 
     with Timer("Shape Prior Generation"):
         os.system(

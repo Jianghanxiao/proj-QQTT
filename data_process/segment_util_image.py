@@ -111,6 +111,4 @@ ref_img = np.zeros((h, w, 4), dtype=np.uint8)
 mask_bool = mask_img > 0
 ref_img[mask_bool, :3] = raw_img[mask_bool]
 ref_img[:, :, 3] = mask_bool.astype(np.uint8) * 255
-
-
 cv2.imwrite(output_path, ref_img)
