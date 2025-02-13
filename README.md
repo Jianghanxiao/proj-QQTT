@@ -28,16 +28,10 @@ python data_process/record_data_align.py --case_name [] --start [] --end []
 After this step, the data includes the color (frames and video), depth, calibrate.pkl and metadata.json (Should also be the realeas of our data, about 500 MB)
 
 ```
-# Get the masks from GroundedSAM2
-python test_real.py 
+python process_data.py --base_path [] --case_name [] --category []
 
-python data_process/data_process_pcd.py
-# Process the semantic mask to deprecate the points with bad depth
-python data_process/data_process_mask.py
-# Get the track data from CoTracker
-python data_process/get_track.py
-# Process the track data
-python data_process/data_process_track.py
+# Need to do alignment first, then can do sampling
+
 # Do shapre reconstruction for the first frame and do the downsampling of the points
 python data_process/data_process_sample.py
 ```
