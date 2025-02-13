@@ -85,14 +85,6 @@ def as_mesh(scene_or_mesh):
     return mesh
 
 
-def get_bbox(img):
-    """Get bounding box of non-zero pixels in the image."""
-    non_zero_coords = np.where(img != 0)
-    ymin, ymax = np.min(non_zero_coords[0]), np.max(non_zero_coords[0])
-    xmin, xmax = np.min(non_zero_coords[1]), np.max(non_zero_coords[1])
-    return xmin, ymin, xmax, ymax
-
-
 def project_2d_to_3d(image_points, depth, camera_intrinsics, camera_pose):
     """
     Project 2D image points to 3D space using the depth map, camera intrinsics, and pose.
