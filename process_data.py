@@ -20,6 +20,7 @@ PROCESS_SEG = False
 PROCESS_SHAPE_PRIOR = False
 PROCESS_TRACK = False
 PROCESS_OTHER = False
+PROCESS_ALIGN = True
 
 base_path = args.base_path
 case_name = args.case_name
@@ -138,4 +139,11 @@ if PROCESS_OTHER:
     with Timer("Data Tracking"):
         os.system(
             f"python ./data_process/data_process_track.py --base_path {base_path} --case_name {case_name}"
+        )
+
+if PROCESS_ALIGN:
+    # Align the shape prior with partial observation
+    with Timer("Alignment"):
+        os.system(
+            f"python ./data_process/align.py --base_path {base_path} --case_name {case_name} --controller_name {CONTROLLER_NAME}"
         )

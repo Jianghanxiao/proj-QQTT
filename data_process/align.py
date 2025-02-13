@@ -32,6 +32,47 @@ base_path = args.base_path
 case_name = args.case_name
 CONTROLLER_NAME = args.controller_name
 
+
+def existDir(dir_path):
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+
+def pose_selection_render_superglue(
+    raw_img, mesh_path, intrinsic, mesh, crop_img, output_dir
+):
+    # Calculate camera parameters
+    fov = 2 * np.arctan(raw_img.shape[1] / (2 * intrinsic[0, 0]))
+
+    # Calculate suitable rendering radius
+    bounding_box = mesh.bounds
+    max_dimension = np.linalg.norm(bounding_box[1] - bounding_box[0])
+    radius = 2 * (max_dimension / 2) / np.tan(fov / 2)
+
+    # Render multimle images and feature matching
+    colors, depths, camera_poses, camera_intrinsics = render_multi_images(
+        mesh_path,
+        raw_img.shape[1],
+        raw_img.shape[0],
+        fov,
+        radius=radius,
+        num_samples=8,
+        num_ups=4,
+        device="cuda",
+    )
+    grays = [cv2.cvtColor(color, cv2.COLOR_BGR2GRAY) for color in colors]
+    # Use superglue to match the features
+    best_idx, match_result = image_pair_matching(
+        grays, crop_img, output_dir, viz_best=True
+    )
+    print("matched point number", np.sum(match_result["matches"] > -1))
+
+    best_color = colors[best_idx]
+    best_depth = depths[best_idx]
+    best_pose = camera_poses[best_idx].cpu().numpy()
+    return best_color, best_depth, best_pose, match_result, camera_intrinsics
+
+
 if __name__ == "__main__":
     cam_idx = 0
     img_path = f"{base_path}/{case_name}/color/{cam_idx}/0.png"
@@ -90,57 +131,46 @@ if __name__ == "__main__":
     crop_img = crop_img[bbox[1] : bbox[3], bbox[0] : bbox[2]]
     crop_img = cv2.cvtColor(crop_img, cv2.COLOR_RGB2GRAY)
 
-    # Calculate camera parameters
-    fov = 2 * np.arctan(raw_img.shape[1] / (2 * intrinsic[0, 0]))
-
-    # Calculate suitable rendering radius
-    bounding_box = mesh.bounds
-    max_dimension = np.linalg.norm(bounding_box[1] - bounding_box[0])
-    radius = 2 * (max_dimension / 2) / np.tan(fov / 2)
-
-    # Render multimle images and feature matching
-    print("rendering objects...")
-    colors, depths, camera_poses, camera_intrinsics = render_multi_images(
-        mesh_path,
-        raw_img.shape[1],
-        raw_img.shape[0],
-        fov,
-        radius=radius,
-        num_samples=8,
-        num_ups=4,
-        device="cuda",
+    existDir(f"{base_path}/{case_name}/shape/matching")
+    # Render the object and match the features
+    best_color, best_depth, best_pose, match_result, camera_intrinsics = (
+        pose_selection_render_superglue(
+            raw_img,
+            mesh_path,
+            intrinsic,
+            mesh,
+            crop_img,
+            output_dir=f"{base_path}/{case_name}/shape/matching",
+        )
     )
-    grays = [cv2.cvtColor(color, cv2.COLOR_BGR2GRAY) for color in colors]
-
-    # Use superglue to match the features
-    print("matching features...")
-    best_pose, match_result = image_pair_matching(
-        grays, crop_img, "./test_output", viz_best=True
-    )
-    chosen_pose = camera_poses[best_pose].cpu().numpy()
-    print("best_pose", np.array2string(chosen_pose, separator=", "))
-    print("matched point number", np.sum(match_result["matches"] > -1))
-    # cv2.imshow("Reference image", colors[best_pose])
-    # cv2.waitKey(0)
-
+    
+    # Get the projected 3D matching points on the mesh
     valid_matches = match_result["matches"] > -1
-    image_points = match_result["keypoints0"][valid_matches]
-    world_points, valid_mask = project_2d_to_3d(
-        image_points, depths[best_pose], camera_intrinsics, chosen_pose
+    render_matching_points = match_result["keypoints0"][valid_matches]
+    mesh_matching_points, valid_mask = project_2d_to_3d(
+        render_matching_points, best_depth, camera_intrinsics, best_pose
     )
-    image_points = image_points[valid_mask]
-
-    # Visualize the correpsonded points on the mesh and on the image
-    plot_mesh_with_points(mesh, world_points, "test1.png")
-    plot_image_with_points(depths[best_pose], image_points, "test2.png")
-
-    # Process matched points on original raw frame
-    # - keypoints1 is of the original image
-    # - match_points_on_raw: 2D points of keypoints1 in pixel coordinates
-    match_points_on_mask = match_result["keypoints1"][
+    render_matching_points = render_matching_points[valid_mask]
+    # Get the matching points on the raw image
+    raw_matching_points_box = match_result["keypoints1"][
         match_result["matches"][valid_matches]
     ]
-    match_points_on_mask = match_points_on_mask[valid_mask]
+    raw_matching_points_box = raw_matching_points_box[valid_mask]
+    raw_matching_points = raw_matching_points_box + np.array([bbox[0], bbox[1]])
 
-    match_points_on_raw = match_points_on_mask + np.array([bbox[0], bbox[1]])
-    plot_image_with_points(raw_img, match_points_on_raw, "test_3.png")
+    # Do visualization for the matching
+    plot_mesh_with_points(
+        mesh,
+        mesh_matching_points,
+        f"{base_path}/{case_name}/shape/matching/mesh_matching.png",
+    )
+    plot_image_with_points(
+        best_depth,
+        render_matching_points,
+        f"{base_path}/{case_name}/shape/matching/redner_matching.png",
+    )
+    plot_image_with_points(
+        raw_img,
+        raw_matching_points,
+        f"{base_path}/{case_name}/shape/matching/raw_matching.png",
+    )
