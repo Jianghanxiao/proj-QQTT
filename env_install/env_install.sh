@@ -1,5 +1,6 @@
 pip install warp-lang
-pip install usd-core matplotlib pyglet
+pip install usd-core matplotlib
+pip install "pyglet<2"
 pip install open3d
 pip install trimesh
 

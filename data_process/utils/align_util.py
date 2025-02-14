@@ -12,6 +12,20 @@ from pytorch3d.renderer import (
     MeshRasterizer,
     SoftPhongShader,
 )
+from scipy.spatial import cKDTree
+
+
+def select_point(points, raw_matching_points, object_mask):
+    mask_coords = np.column_stack(np.where(object_mask > 0))
+    mask_coords = mask_coords[:, ::-1]
+    tree = cKDTree(mask_coords)
+
+    distances, indices = tree.query(raw_matching_points)
+
+    new_match = mask_coords[indices]
+    # Pay attention to the case that the keypoint is in different order
+    matched_points = points[new_match[:, 1], new_match[:, 0]]
+    return mask_coords[indices], matched_points
 
 
 def plot_mesh_with_points(mesh, points, filename):
@@ -36,9 +50,11 @@ def plot_mesh_with_points(mesh, points, filename):
     plt.clf()
 
 
-def plot_image_with_points(image, points, save_dir):
+def plot_image_with_points(image, points, save_dir, points2=None):
     plt.imshow(image)
     plt.scatter(points[:, 0], points[:, 1], color="red", s=5)
+    if points2 is not None:
+        plt.scatter(points2[:, 0], points2[:, 1], color="blue", s=5)
     plt.xlabel("X")
     plt.ylabel("Y")
     plt.title("Points on Original Image")
