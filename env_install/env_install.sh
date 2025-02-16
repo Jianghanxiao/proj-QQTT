@@ -1,3 +1,4 @@
+conda install -y numpy==1.26.4
 pip install warp-lang
 pip install usd-core matplotlib
 pip install "pyglet<2"

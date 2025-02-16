@@ -20,7 +20,7 @@ PROCESS_SEG = False
 PROCESS_SHAPE_PRIOR = False
 PROCESS_TRACK = False
 PROCESS_OTHER = False
-PROCESS_ALIGN = True
+PROCESS_ALIGN = False
 
 base_path = args.base_path
 case_name = args.case_name
