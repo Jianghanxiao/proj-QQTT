@@ -140,17 +140,10 @@ def deform_ARAP(initial_mesh_world, mesh_matching_points_world, matching_points)
     return deform_mesh, mesh_points_indices
 
 
-def deform_ARAP_ray_registration(
-    deform_kp_mesh_world,
-    obs_points_world,
-    mesh,
-    trimesh_indices,
-    c2w,
-    w2c,
-    mesh_points_indices,
-    matching_points,
+def get_matching_ray_registration(
+    mesh_world, obs_points_world, mesh, trimesh_indices, c2w, w2c
 ):
-    # Do the ARAP deformation based on the ray-casting matching and the keypoints
+    # Get the matching indices and targets based on the viewpoint
     obs_points_cam = np.dot(
         w2c,
         np.hstack((obs_points_world, np.ones((obs_points_world.shape[0], 1)))).T,
@@ -160,8 +153,8 @@ def deform_ARAP_ray_registration(
         w2c,
         np.hstack(
             (
-                np.asarray(deform_kp_mesh_world.vertices),
-                np.ones((np.asarray(deform_kp_mesh_world.vertices).shape[0], 1)),
+                np.asarray(mesh_world.vertices),
+                np.ones((np.asarray(mesh_world.vertices).shape[0], 1)),
             )
         ).T,
     ).T
@@ -210,7 +203,19 @@ def deform_ARAP_ray_registration(
     new_indices = np.asarray(new_indices)
     new_targets = np.asarray(new_targets)
 
-    # Merge the indices, if the indices are not in the mesh_points_indices, then add them
+    return new_indices, new_targets
+
+
+def deform_ARAP_ray_registration(
+    deform_kp_mesh_world,
+    obs_points_world,
+    mesh,
+    trimesh_indices,
+    c2ws,
+    w2cs,
+    mesh_points_indices,
+    matching_points,
+):
     final_indices = []
     final_targets = []
     for index, target in zip(mesh_points_indices, matching_points):
@@ -218,10 +223,14 @@ def deform_ARAP_ray_registration(
             final_indices.append(index)
             final_targets.append(target)
 
-    for index, target in zip(new_indices, new_targets):
-        if index not in final_indices:
-            final_indices.append(index)
-            final_targets.append(target)
+    for c2w, w2c in zip(c2ws, w2cs):
+        new_indices, new_targets = get_matching_ray_registration(
+            deform_kp_mesh_world, obs_points_world, mesh, trimesh_indices, c2w, w2c
+        )
+        for index, target in zip(new_indices, new_targets):
+            if index not in final_indices:
+                final_indices.append(index)
+                final_targets.append(target)
 
     # Also need to adjust the positions to make sure they are above the table
     indices = np.where(np.asarray(deform_kp_mesh_world.vertices)[:, 2] > 0)[0]
@@ -279,6 +288,7 @@ if __name__ == "__main__":
         c2ws = pickle.load(f)
         c2w = c2ws[cam_idx]
         w2c = np.linalg.inv(c2w)
+        w2cs = [np.linalg.inv(c2w) for c2w in c2ws]
 
     # Load the shape prior
     mesh = trimesh.load_mesh(mesh_path, force="mesh")
@@ -414,17 +424,30 @@ if __name__ == "__main__":
     mesh_matching_points_cam = mesh_matching_points_cam[:, :3]
 
     # Load the pcd in world coordinate of raw image matching points
+    obs_points = []
+    obs_colors = []
     pcd_path = f"{base_path}/{case_name}/pcd/0.npz"
     mask_path = f"{base_path}/{case_name}/mask/processed_masks.pkl"
     data = np.load(pcd_path)
-    points = data["points"][cam_idx]
-    colors = data["colors"][cam_idx]
     with open(mask_path, "rb") as f:
         processed_masks = pickle.load(f)
-    object_mask = processed_masks[cam_idx][0]["object"]
+    for i in range(3):
+        points = data["points"][i]
+        colors = data["colors"][i]
+        mask = processed_masks[0][i]["object"]
+        obs_points.append(points[mask])
+        obs_colors.append(colors[mask])
+        if i == 0:
+            first_points = points
+            first_mask = mask
+
+    obs_points = np.vstack(obs_points)
+    obs_colors = np.vstack(obs_colors)
 
     # Find the cloest points for the raw_matching_points
-    new_match, matching_points = select_point(points, raw_matching_points, object_mask)
+    new_match, matching_points = select_point(
+        first_points, raw_matching_points, first_mask
+    )
     matching_points_cam = np.dot(
         w2c, np.hstack((matching_points, np.ones((matching_points.shape[0], 1)))).T
     ).T
@@ -433,7 +456,7 @@ if __name__ == "__main__":
     if VIS:
         # Draw the raw_matching_points and new matching points on the masked
         vis_img = raw_img.copy()
-        vis_img[~object_mask] = 0
+        vis_img[~first_mask] = 0
         plot_image_with_points(
             vis_img,
             raw_matching_points,
@@ -479,11 +502,11 @@ if __name__ == "__main__":
     # Identify the vertex which blocks or blocked by the observation, then match them with the observation points on the ray
     final_mesh_world = deform_ARAP_ray_registration(
         deform_kp_mesh_world,
-        points[object_mask],
+        obs_points,
         mesh,
         trimesh_indices,
-        c2w,
-        w2c,
+        c2ws,
+        w2cs,
         mesh_points_indices,
         matching_points,
     )
@@ -493,12 +516,34 @@ if __name__ == "__main__":
 
         # Visualize the partial observation and the mesh
         pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points[object_mask])
-        pcd.colors = o3d.utility.Vector3dVector(colors[object_mask])
+        pcd.points = o3d.utility.Vector3dVector(obs_points)
+        pcd.colors = o3d.utility.Vector3dVector(obs_colors)
 
         coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-    
-        o3d.visualization.draw_geometries([pcd, final_mesh_world, coordinate])
+
+        # Render the final stuffs as a turntable video
+        vis = o3d.visualization.Visualizer()
+        vis.create_window(visible=False)
+        dummy_frame = np.asarray(vis.capture_screen_float_buffer(do_render=True))
+        height, width, _ = dummy_frame.shape
+        fourcc = cv2.VideoWriter_fourcc(*"avc1")
+        video_writer = cv2.VideoWriter(
+            f"{output_dir}/final_matching.mp4", fourcc, 30, (width, height)
+        )
+
+        vis.add_geometry(pcd)
+        vis.add_geometry(final_mesh_world)
+        vis.add_geometry(coordinate)
+        view_control = vis.get_view_control()
+
+        for j in range(360):
+            view_control.rotate(10, 0)
+            vis.poll_events()
+            vis.update_renderer()
+            frame = np.asarray(vis.capture_screen_float_buffer(do_render=True))
+            frame = (frame * 255).astype(np.uint8)
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            video_writer.write(frame)
 
     mesh.vertices = np.asarray(final_mesh_world.vertices)[trimesh_indices]
-    mesh.show()
+    mesh.export(f"{output_dir}/final_mesh.glb")

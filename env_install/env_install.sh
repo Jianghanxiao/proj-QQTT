@@ -11,7 +11,7 @@ pip install termcolor
 pip install fvcore
 pip install wandb
 pip install moviepy imageio
-conda install -y c conda-forge opencv
+conda install -y opencv
 pip install cma
 pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu121_pyt240/download.html
 
