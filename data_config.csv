@@ -1,0 +1,13 @@
+weird_package,package,False
+single_lift_cloth,cloth,False
+rope_double_hand,twine,True
+double_stretch_zebra,toy,True
+double_stretch_sloth,sloth,True
+single_lift_rope,twine,True
+single_lift_dinosor,dinosor,True
+double_lift_zebra,toy,True
+double_lift_sloth,sloth,True
+single_lift_sloth,sloth,True
+single_lift_zebra,toy,True
+single_push_rope,twine,True
+single_push_sloth,sloth,True

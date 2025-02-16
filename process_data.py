@@ -13,20 +13,23 @@ parser.add_argument(
 parser.add_argument("--case_name", type=str, required=True)
 # The category of the object used for segmentation
 parser.add_argument("--category", type=str, required=True)
+parser.add_argument("--shape_prior", action="store_true", default=False)
 args = parser.parse_args()
 
 # Set the debug flags
 PROCESS_SEG = False
 PROCESS_SHAPE_PRIOR = False
 PROCESS_TRACK = False
-PROCESS_OTHER = False
+PROCESS_3D = False
 PROCESS_ALIGN = False
+PROCESS_FINAL = True
 
 base_path = args.base_path
 case_name = args.case_name
 category = args.category
 TEXT_PROMPT = f"{category}.hand"
 CONTROLLER_NAME = "hand"
+SHAPE_PRIOR = args.shape_prior
 
 logger = None
 
@@ -85,7 +88,7 @@ if PROCESS_SEG:
         )
 
 
-if PROCESS_SHAPE_PRIOR:
+if PROCESS_SHAPE_PRIOR and SHAPE_PRIOR:
     # Get the mask path for the image
     with open(f"{base_path}/{case_name}/mask/mask_info_{0}.json", "r") as f:
         data = json.load(f)
@@ -122,7 +125,7 @@ if PROCESS_TRACK:
             f"python ./data_process/dense_track.py --base_path {base_path} --case_name {case_name}"
         )
 
-if PROCESS_OTHER:
+if PROCESS_3D:
     # Get the pcd in the world coordinate from the raw observations
     with Timer("Lift to 3D"):
         os.system(
@@ -141,9 +144,21 @@ if PROCESS_OTHER:
             f"python ./data_process/data_process_track.py --base_path {base_path} --case_name {case_name}"
         )
 
-if PROCESS_ALIGN:
+if PROCESS_ALIGN and SHAPE_PRIOR:
     # Align the shape prior with partial observation
     with Timer("Alignment"):
         os.system(
             f"python ./data_process/align.py --base_path {base_path} --case_name {case_name} --controller_name {CONTROLLER_NAME}"
         )
+
+if PROCESS_FINAL:
+    # Get the final PCD used for the inverse physics with/without the shape prior
+    with Timer("Final Data Generation"):
+        if SHAPE_PRIOR:
+            os.system(
+                f"python ./data_process/data_process_sample.py --base_path {base_path} --case_name {case_name} --shape_prior"
+            )
+        else:
+            os.system(
+                f"python ./data_process/data_process_sample.py --base_path {base_path} --case_name {case_name}"
+            )

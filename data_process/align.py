@@ -544,6 +544,7 @@ if __name__ == "__main__":
             frame = (frame * 255).astype(np.uint8)
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             video_writer.write(frame)
+        vis.destroy_window()
 
     mesh.vertices = np.asarray(final_mesh_world.vertices)[trimesh_indices]
     mesh.export(f"{output_dir}/final_mesh.glb")

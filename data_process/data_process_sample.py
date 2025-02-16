@@ -3,27 +3,32 @@
 
 import numpy as np
 import open3d as o3d
-from tqdm import tqdm
-import os
-import glob
 import pickle
 import matplotlib.pyplot as plt
 import trimesh
+import cv2
+from utils.align_util import as_mesh
 from argparse import ArgumentParser
-import copy
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
-# base_path = "/data/proj-qqtt/processed_data/rope_variants"
 parser = ArgumentParser()
-parser.add_argument("--case_name", type=str, default="rope_1")
+parser.add_argument(
+    "--base_path",
+    type=str,
+    required=True,
+)
+parser.add_argument("--case_name", type=str, required=True)
+parser.add_argument("--shape_prior", action="store_true", default=False)
+parser.add_argument("--num_surface_points", type=int, default=1024)
+parser.add_argument("--volume_sample_size", type=float, default=0.005)
 args = parser.parse_args()
+
+base_path = args.base_path
 case_name = args.case_name
-print(f"Processing {case_name}")
-# TODO: Need to manually adjust the following parameters
-num_surface_points = 1024
-volume_sample_size = 0.005
-# When processing for the rope data, this can be False
-SHAPE_COMPLETION = False
+
+# Used to judge if using the shape prior
+SHAPE_PRIOR = args.shape_prior
+num_surface_points = args.num_surface_points
+volume_sample_size = args.volume_sample_size
 
 
 def getSphereMesh(center, radius=0.1, color=[0, 0, 0]):
@@ -47,47 +52,21 @@ def process_unique_points(track_data):
     object_visibilities = object_visibilities[:, unique_idx]
     object_motions_valid = object_motions_valid[:, unique_idx]
 
-    if SHAPE_COMPLETION:
-        # Do the shape completion for the first frame object points
-        object_pcd = o3d.geometry.PointCloud()
-        object_pcd.points = o3d.utility.Vector3dVector(object_points[0])
-        alpha = 0.03
-        mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(
-            object_pcd, alpha
-        )
-        mesh.compute_vertex_normals()
-        o3d.visualization.draw_geometries([object_pcd, mesh])
+    # Make sure all points are above the ground
+    object_points[object_points[..., 2] > 0, 2] = 0
 
-        # radii = [0.005, 0.01, 0.02, 0.04]
-        # object_pcd.estimate_normals(
-        #     search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=30)
-        # )
-        # rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
-        #     object_pcd, o3d.utility.DoubleVector(radii)
-        # )
-        # rec_mesh.compute_vertex_normals()
-        # o3d.visualization.draw_geometries([object_pcd, rec_mesh])
-
-        # mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-        #     object_pcd, depth=9
-        # )
-        # mesh.compute_vertex_normals()
-        # o3d.visualization.draw_geometries([object_pcd, mesh])
-        import pdb
-
-        pdb.set_trace()
+    if SHAPE_PRIOR:
+        shape_mesh_path = f"{base_path}/{case_name}/shape/matching/final_mesh.glb"
+        trimesh_mesh = trimesh.load(shape_mesh_path, force="mesh")
+        trimesh_mesh = as_mesh(trimesh_mesh)
         # Sample the surface points
-        surface_pcd_sampled = mesh.sample_points_poisson_disk(
-            number_of_points=num_surface_points
+        surface_points, _ = trimesh.sample.sample_surface(
+            trimesh_mesh, num_surface_points
         )
-        surface_points = np.asarray(surface_pcd_sampled.points)
         # Sample the interior points
-        vertices = np.asarray(mesh.vertices)
-        faces = np.asarray(mesh.triangles)
-        trimesh_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
         interior_points = trimesh.sample.volume_mesh(trimesh_mesh, 10000)
 
-    if SHAPE_COMPLETION:
+    if SHAPE_PRIOR:
         all_points = np.concatenate(
             [surface_points, interior_points, object_points[0]], axis=0
         )
@@ -104,7 +83,7 @@ def process_unique_points(track_data):
         if grid_index not in grid_flag:
             grid_flag[grid_index] = 1
             index.append(i)
-    if SHAPE_COMPLETION:
+    if SHAPE_PRIOR:
         final_surface_points = []
         for i in range(surface_points.shape[0]):
             grid_index = tuple(
@@ -131,13 +110,33 @@ def process_unique_points(track_data):
         )
     else:
         all_points = object_points[0][index]
+
+    # Render the final pcd with interior filling as a turntable video
     all_pcd = o3d.geometry.PointCloud()
     all_pcd.points = o3d.utility.Vector3dVector(all_points)
-    # coorindate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-    # o3d.visualization.draw_geometries([all_pcd, coorindate])
+    coorindate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
 
-    # Make sure all points are above the ground
-    object_points[object_points[..., 2] > 0, 2] = 0
+    vis = o3d.visualization.Visualizer()
+    vis.create_window(visible=False)
+    dummy_frame = np.asarray(vis.capture_screen_float_buffer(do_render=True))
+    height, width, _ = dummy_frame.shape
+    fourcc = cv2.VideoWriter_fourcc(*"avc1")
+    video_writer = cv2.VideoWriter(
+        f"{base_path}/{case_name}/final_pcd.mp4", fourcc, 30, (width, height)
+    )
+
+    vis.add_geometry(all_pcd)
+    vis.add_geometry(coorindate)
+    view_control = vis.get_view_control()
+    for j in range(360):
+        view_control.rotate(10, 0)
+        vis.poll_events()
+        vis.update_renderer()
+        frame = np.asarray(vis.capture_screen_float_buffer(do_render=True))
+        frame = (frame * 255).astype(np.uint8)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        video_writer.write(frame)
+    vis.destroy_window()
 
     track_data.pop("object_points")
     track_data.pop("object_colors")
@@ -147,7 +146,7 @@ def process_unique_points(track_data):
     track_data["object_colors"] = object_colors[:, index, :]
     track_data["object_visibilities"] = object_visibilities[:, index]
     track_data["object_motions_valid"] = object_motions_valid[:, index]
-    if SHAPE_COMPLETION:
+    if SHAPE_PRIOR:
         track_data["surface_points"] = np.array(final_surface_points)
         track_data["interior_points"] = np.array(final_interior_points)
     else:
@@ -167,7 +166,14 @@ def visualize_track(track_data):
     frame_num = object_points.shape[0]
 
     vis = o3d.visualization.Visualizer()
-    vis.create_window()
+    vis.create_window(visible=False)
+    dummy_frame = np.asarray(vis.capture_screen_float_buffer(do_render=True))
+    height, width, _ = dummy_frame.shape
+    fourcc = cv2.VideoWriter_fourcc(*"avc1")
+    video_writer = cv2.VideoWriter(
+        f"{base_path}/{case_name}/final_data.mp4", fourcc, 30, (width, height)
+    )
+
     controller_meshes = []
     prev_center = []
 
@@ -215,6 +221,12 @@ def visualize_track(track_data):
                 prev_center[j] = origin
             vis.poll_events()
             vis.update_renderer()
+
+        frame = np.asarray(vis.capture_screen_float_buffer(do_render=True))
+        frame = (frame * 255).astype(np.uint8)
+        # Convert RGB to BGR
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        video_writer.write(frame)
 
 
 if __name__ == "__main__":
