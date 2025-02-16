@@ -22,7 +22,6 @@ from scipy.optimize import minimize
 from scipy.spatial import KDTree
 
 VIS = True
-
 parser = ArgumentParser()
 parser.add_argument(
     "--base_path",
@@ -36,7 +35,7 @@ args = parser.parse_args()
 base_path = args.base_path
 case_name = args.case_name
 CONTROLLER_NAME = args.controller_name
-output_dir = f"{base_path}/{case_name}/shape/new_matching"
+output_dir = f"{base_path}/{case_name}/shape/matching"
 
 
 def existDir(dir_path):
@@ -74,6 +73,184 @@ def pose_selection_render_superglue(
     best_depth = depths[best_idx]
     best_pose = camera_poses[best_idx].cpu().numpy()
     return best_color, best_depth, best_pose, match_result, camera_intrinsics
+
+
+def registration_pnp(mesh_matching_points, raw_matching_points, intrinsic):
+    # Solve the PNP and verify the reprojection error
+    success, rvec, tvec = cv2.solvePnP(
+        np.float32(mesh_matching_points),
+        np.float32(raw_matching_points),
+        np.float32(intrinsic),
+        distCoeffs=np.zeros(4, dtype=np.float32),
+        flags=cv2.SOLVEPNP_EPNP,
+    )
+    assert success, "solvePnP failed"
+    projected_points, _ = cv2.projectPoints(
+        np.float32(mesh_matching_points),
+        rvec,
+        tvec,
+        intrinsic,
+        np.zeros(4, dtype=np.float32),
+    )
+    error = np.linalg.norm(
+        np.float32(raw_matching_points) - projected_points.reshape(-1, 2), axis=1
+    ).mean()
+    print(f"Reprojection Error: {error}")
+    if error > 50:
+        print(f"solvePnP failed for this case {case_name}.$$$$$$$$$$$$$$$$$$$$$$$$$$")
+
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
+    mesh2raw_camera = np.eye(4, dtype=np.float32)
+    mesh2raw_camera[:3, :3] = rotation_matrix
+    mesh2raw_camera[:3, 3] = tvec.squeeze()
+
+    return mesh2raw_camera
+
+
+def registration_scale(mesh_matching_points_cam, matching_points_cam):
+    # After PNP, optimize the scale in the camera coordinate
+    def objective(scale, mesh_points, pcd_points):
+        transformed_points = scale * mesh_points
+        loss = np.sum(np.sum((transformed_points - pcd_points) ** 2, axis=1))
+        return loss
+
+    initial_scale = 1
+    result = minimize(
+        objective,
+        initial_scale,
+        args=(mesh_matching_points_cam, matching_points_cam),
+        method="L-BFGS-B",
+    )
+    optimal_scale = result.x[0]
+    print("Rescale:", optimal_scale)
+    return optimal_scale
+
+
+def deform_ARAP(initial_mesh_world, mesh_matching_points_world, matching_points):
+    # Do the ARAP deformation based on the matching keypoints
+    mesh_vertices = np.asarray(initial_mesh_world.vertices)
+    kdtree = KDTree(mesh_vertices)
+    _, mesh_points_indices = kdtree.query(mesh_matching_points_world)
+    mesh_points_indices = np.asarray(mesh_points_indices, dtype=np.int32)
+    deform_mesh = initial_mesh_world.deform_as_rigid_as_possible(
+        o3d.utility.IntVector(mesh_points_indices),
+        o3d.utility.Vector3dVector(matching_points),
+        max_iter=1,
+    )
+    return deform_mesh, mesh_points_indices
+
+
+def deform_ARAP_ray_registration(
+    deform_kp_mesh_world,
+    obs_points_world,
+    mesh,
+    trimesh_indices,
+    c2w,
+    w2c,
+    mesh_points_indices,
+    matching_points,
+):
+    # Do the ARAP deformation based on the ray-casting matching and the keypoints
+    obs_points_cam = np.dot(
+        w2c,
+        np.hstack((obs_points_world, np.ones((obs_points_world.shape[0], 1)))).T,
+    ).T
+    obs_points_cam = obs_points_cam[:, :3]
+    vertices_cam = np.dot(
+        w2c,
+        np.hstack(
+            (
+                np.asarray(deform_kp_mesh_world.vertices),
+                np.ones((np.asarray(deform_kp_mesh_world.vertices).shape[0], 1)),
+            )
+        ).T,
+    ).T
+    vertices_cam = vertices_cam[:, :3]
+
+    obs_kd = KDTree(obs_points_cam)
+
+    new_indices = []
+    new_targets = []
+    # trimesh used to do the ray-casting test
+    mesh.vertices = np.asarray(vertices_cam)[trimesh_indices]
+    for index, vertex in enumerate(vertices_cam):
+        ray_origins = np.array([[0, 0, 0]])
+        ray_direction = vertex
+        ray_direction = ray_direction / np.linalg.norm(ray_direction)
+        ray_directions = np.array([ray_direction])
+        locations, _, _ = mesh.ray.intersects_location(
+            ray_origins=ray_origins, ray_directions=ray_directions, multiple_hits=False
+        )
+
+        ignore_flag = False
+
+        if len(locations) > 0:
+            first_intersection = locations[0]
+            vertex_distance = np.linalg.norm(vertex)
+            intersection_distance = np.linalg.norm(first_intersection)
+            if intersection_distance < vertex_distance - 1e-4:
+                # If the intersection point is not the vertex, it means the vertex is not visible from the camera viewpoint
+                ignore_flag = True
+
+        if ignore_flag:
+            continue
+        else:
+            # Select the closest point to the ray of the observation points as the matching point
+            indices = obs_kd.query_ball_point(vertex, 0.02)
+            line_distances = line_point_distance(vertex, obs_points_cam[indices])
+            # Get the closest point
+            if len(line_distances) > 0:
+                closest_index = np.argmin(line_distances)
+                target = np.dot(
+                    c2w, np.hstack((obs_points_cam[indices][closest_index], 1))
+                )
+                new_indices.append(index)
+                new_targets.append(target[:3])
+
+    new_indices = np.asarray(new_indices)
+    new_targets = np.asarray(new_targets)
+
+    # Merge the indices, if the indices are not in the mesh_points_indices, then add them
+    final_indices = []
+    final_targets = []
+    for index, target in zip(mesh_points_indices, matching_points):
+        if index not in final_indices:
+            final_indices.append(index)
+            final_targets.append(target)
+
+    for index, target in zip(new_indices, new_targets):
+        if index not in final_indices:
+            final_indices.append(index)
+            final_targets.append(target)
+
+    # Also need to adjust the positions to make sure they are above the table
+    indices = np.where(np.asarray(deform_kp_mesh_world.vertices)[:, 2] > 0)[0]
+    for index in indices:
+        if index not in final_indices:
+            final_indices.append(index)
+            target = np.asarray(deform_kp_mesh_world.vertices)[index].copy()
+            target[2] = 0
+            final_targets.append(target)
+        else:
+            target = final_targets[final_indices.index(index)]
+            if target[2] > 0:
+                target[2] = 0
+                final_targets[final_indices.index(index)] = target
+
+    final_mesh_world = deform_kp_mesh_world.deform_as_rigid_as_possible(
+        o3d.utility.IntVector(final_indices),
+        o3d.utility.Vector3dVector(final_targets),
+        max_iter=1,
+    )
+    return final_mesh_world
+
+
+def line_point_distance(p, points):
+    # Compute the distance between points and the line between p and [0, 0, 0]
+    p = p / np.linalg.norm(p)
+    points_to_origin = points
+    cross_product = np.linalg.norm(np.cross(points_to_origin, p), axis=1)
+    return cross_product / np.linalg.norm(p)
 
 
 if __name__ == "__main__":
@@ -116,7 +293,7 @@ if __name__ == "__main__":
     # Calculate camera parameters
     fov = 2 * np.arctan(raw_img.shape[1] / (2 * intrinsic[0, 0]))
 
-    if not os.path.exists(f"{base_path}/{case_name}/shape/matching/best_match.pkl"):
+    if not os.path.exists(f"{output_dir}/best_match.pkl"):
         # 2D feature Matching to get the best pose of the object
         bbox = np.argwhere(mask_img > 0.8 * 255)
         bbox = (
@@ -156,10 +333,10 @@ if __name__ == "__main__":
                 mesh_path,
                 mesh,
                 crop_img,
-                output_dir=f"{base_path}/{case_name}/shape/matching",
+                output_dir=output_dir,
             )
         )
-        with open(f"{base_path}/{case_name}/shape/matching/best_match.pkl", "wb") as f:
+        with open(f"{output_dir}/best_match.pkl", "wb") as f:
             pickle.dump(
                 [
                     best_color,
@@ -172,11 +349,12 @@ if __name__ == "__main__":
                 f,
             )
     else:
-        with open(f"{base_path}/{case_name}/shape/matching/best_match.pkl", "rb") as f:
+        with open(f"{output_dir}/best_match.pkl", "rb") as f:
             best_color, best_depth, best_pose, match_result, camera_intrinsics, bbox = (
                 pickle.load(f)
             )
 
+    # Process to get the matching points on the mesh and on the image
     # Get the projected 3D matching points on the mesh
     valid_matches = match_result["matches"] > -1
     render_matching_points = match_result["keypoints0"][valid_matches]
@@ -209,40 +387,16 @@ if __name__ == "__main__":
             f"{output_dir}/raw_matching.png",
         )
 
-    # Do PnP optimization
-    success, rvec, tvec = cv2.solvePnP(
-        np.float32(mesh_matching_points),
-        np.float32(raw_matching_points),
-        np.float32(intrinsic),
-        distCoeffs=np.zeros(4, dtype=np.float32),
-        flags=cv2.SOLVEPNP_EPNP,
+    # Do PnP optimization to optimize the rotation between the 3D mesh keypoints and the 2D image keypoints
+    mesh2raw_camera = registration_pnp(
+        mesh_matching_points, raw_matching_points, intrinsic
     )
-    projected_points, _ = cv2.projectPoints(
-        np.float32(mesh_matching_points),
-        rvec,
-        tvec,
-        intrinsic,
-        np.zeros(4, dtype=np.float32),
-    )
-    error = np.linalg.norm(
-        np.float32(raw_matching_points) - projected_points.reshape(-1, 2), axis=1
-    ).mean()
-    print(f"Reprojection Error: {error}")
-    if error > 50:
-        print(f"solvePnP failed for this case {case_name}.$$$$$$$$$$$$$$$$$$$$$$$$$$")
-
-    rotation_matrix, _ = cv2.Rodrigues(rvec)
-    mesh2raw_camera = np.eye(4, dtype=np.float32)
-    mesh2raw_camera[:3, :3] = rotation_matrix
-    mesh2raw_camera[:3, 3] = tvec.squeeze()
 
     if VIS:
         pnp_camera_pose = np.eye(4, dtype=np.float32)
-        pnp_camera_pose[:3, :3] = np.linalg.inv(rotation_matrix)
-        pnp_camera_pose[3, :3] = tvec.squeeze()  # change due to pytorch3D setting
-        pnp_camera_pose[:, :2] = -pnp_camera_pose[
-            :, :2
-        ]  # change due to pytorch3D setting
+        pnp_camera_pose[:3, :3] = np.linalg.inv(mesh2raw_camera[:3, :3])
+        pnp_camera_pose[3, :3] = mesh2raw_camera[:3, 3]
+        pnp_camera_pose[:, :2] = -pnp_camera_pose[:, :2]
         color, depth = render_image(
             mesh_path, pnp_camera_pose, raw_img.shape[1], raw_img.shape[0], fov, "cuda"
         )
@@ -251,13 +405,13 @@ if __name__ == "__main__":
         plt.imsave(f"{output_dir}/pnp_results.png", color[0])
 
     # Transform the mesh into the real world coordinate
-    mesh_points_cam = np.dot(
+    mesh_matching_points_cam = np.dot(
         mesh2raw_camera,
         np.hstack(
             (mesh_matching_points, np.ones((mesh_matching_points.shape[0], 1)))
         ).T,
     ).T
-    mesh_points_cam = mesh_points_cam[:, :3]
+    mesh_matching_points_cam = mesh_matching_points_cam[:, :3]
 
     # Load the pcd in world coordinate of raw image matching points
     pcd_path = f"{base_path}/{case_name}/pcd/0.npz"
@@ -270,14 +424,14 @@ if __name__ == "__main__":
     object_mask = processed_masks[cam_idx][0]["object"]
 
     # Find the cloest points for the raw_matching_points
-    new_match, matched_points = select_point(points, raw_matching_points, object_mask)
-    matched_points_cam = np.dot(
-        w2c, np.hstack((matched_points, np.ones((matched_points.shape[0], 1)))).T
+    new_match, matching_points = select_point(points, raw_matching_points, object_mask)
+    matching_points_cam = np.dot(
+        w2c, np.hstack((matching_points, np.ones((matching_points.shape[0], 1)))).T
     ).T
-    matched_points_cam = matched_points_cam[:, :3]
+    matching_points_cam = matching_points_cam[:, :3]
 
     if VIS:
-        # Draw the raw_matching_points on the masked
+        # Draw the raw_matching_points and new matching points on the masked
         vis_img = raw_img.copy()
         vis_img[~object_mask] = 0
         plot_image_with_points(
@@ -287,99 +441,64 @@ if __name__ == "__main__":
             new_match,
         )
 
-    def objective(scale, mesh_points, pcd_points):
-        transformed_points = scale * mesh_points
-        loss = np.sum(np.sum((transformed_points - pcd_points) ** 2, axis=1))
-        return loss
+    # Use the matching points in the camera coordinate to optimize the scame between the mesh and the observation
+    optimal_scale = registration_scale(mesh_matching_points_cam, matching_points_cam)
 
-    initial_scale = 1
-    result = minimize(
-        objective,
-        initial_scale,
-        args=(mesh_points_cam, matched_points_cam),
-        method="L-BFGS-B",
-    )
-    optimal_scale = result.x[0]
-    print("Rescale:", optimal_scale)
-
+    # Compute the rigid transformation from the original mesh to the final world coordinate
     scale_matrix = np.eye(4) * optimal_scale
     scale_matrix[3, 3] = 1
-    scale_camera = np.dot(scale_matrix, mesh2raw_camera)
-    final_transform = np.dot(c2w, scale_camera)
+    mesh2world = np.dot(c2w, np.dot(scale_matrix, mesh2raw_camera))
 
-    mesh_points_world = np.dot(
-        final_transform,
+    mesh_matching_points_world = np.dot(
+        mesh2world,
         np.hstack(
             (mesh_matching_points, np.ones((mesh_matching_points.shape[0], 1)))
         ).T,
     ).T
-    mesh_points_world = mesh_points_world[:, :3]
+    mesh_matching_points_world = mesh_matching_points_world[:, :3]
 
-    # Do the ARAP deformation based on the points
-    cur_mesh = o3d.io.read_triangle_mesh(mesh_path)
-    cur_mesh.transform(final_transform)
-    cur_mesh = cur_mesh.compute_triangle_normals()
-    cur_mesh = cur_mesh.remove_duplicated_vertices()
-    cur_mesh = cur_mesh.remove_duplicated_triangles()
-    cur_mesh = cur_mesh.remove_unreferenced_vertices()
-    cur_mesh = cur_mesh.filter_smooth_simple()
-    # Get the vertex indices of the mesh_points
-    mesh_vertices = np.asarray(cur_mesh.vertices)  # 获取 mesh 顶点
-    kdtree = KDTree(mesh_vertices)
-    _, mesh_points_indices = kdtree.query(mesh_points_world)
-    mesh_points_indices = np.asarray(mesh_points_indices, dtype=np.int32)
-    # import pdb
+    # Do the ARAP based on the matching keypoints
+    # Convert the mesh to open3d to use the ARAP function
+    initial_mesh_world = o3d.geometry.TriangleMesh()
+    initial_mesh_world.vertices = o3d.utility.Vector3dVector(np.asarray(mesh.vertices))
+    initial_mesh_world.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.faces))
+    # Need to remove the duplicated vertices to enable open3d, however, the duplicated points are important in trimesh for texture
+    initial_mesh_world = initial_mesh_world.remove_duplicated_vertices()
+    # Get the index from original vertices to the mesh vertices, mapping between trimesh and open3d
+    kdtree = KDTree(initial_mesh_world.vertices)
+    _, trimesh_indices = kdtree.query(np.asarray(mesh.vertices))
+    trimesh_indices = np.asarray(trimesh_indices, dtype=np.int32)
+    initial_mesh_world.transform(mesh2world)
 
-    # pdb.set_trace()
-    new_mesh = cur_mesh.deform_as_rigid_as_possible(
-        o3d.utility.IntVector(mesh_points_indices),
-        o3d.utility.Vector3dVector(matched_points),
-        max_iter=1,
+    # ARAP based on the keypoints
+    deform_kp_mesh_world, mesh_points_indices = deform_ARAP(
+        initial_mesh_world, mesh_matching_points_world, matching_points
     )
-    new_mesh.compute_vertex_normals()
-    new_mesh.paint_uniform_color([0, 0.5, 0])
 
-    # Visualize in 3D PCD and the mesh
-    # points_cam = np.dot(
-    #     w2c, np.hstack((points[object_mask], np.ones((points[object_mask].shape[0], 1)))).T
-    # ).T
-    # points_cam = points_cam[:, :3]
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points[object_mask])
-    pcd.colors = o3d.utility.Vector3dVector(colors[object_mask] / 255)
+    # Do the ARAP based on both the ray-casting matching and the keypoints
+    # Identify the vertex which blocks or blocked by the observation, then match them with the observation points on the ray
+    final_mesh_world = deform_ARAP_ray_registration(
+        deform_kp_mesh_world,
+        points[object_mask],
+        mesh,
+        trimesh_indices,
+        c2w,
+        w2c,
+        mesh_points_indices,
+        matching_points,
+    )
 
-    vis_mesh = o3d.io.read_triangle_mesh(mesh_path)
-    vis_mesh.compute_vertex_normals()
-    vis_mesh.transform(final_transform)
-    vis_mesh.paint_uniform_color([0.5, 0, 0])
+    if VIS:
+        final_mesh_world.compute_vertex_normals()
 
-    mesh_keypoint = o3d.geometry.PointCloud()
-    mesh_keypoint.points = o3d.utility.Vector3dVector(mesh_points_world)
-    mesh_keypoint.paint_uniform_color([1, 0, 0])
+        # Visualize the partial observation and the mesh
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points[object_mask])
+        pcd.colors = o3d.utility.Vector3dVector(colors[object_mask])
 
-    raw_keypoint = o3d.geometry.PointCloud()
-    raw_keypoint.points = o3d.utility.Vector3dVector(matched_points)
-    raw_keypoint.paint_uniform_color([0, 0, 1])
+        coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+    
+        o3d.visualization.draw_geometries([pcd, final_mesh_world, coordinate])
 
-    coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-    # o3d.visualization.draw_geometries(
-    #     [pcd, vis_mesh, mesh_keypoint, raw_keypoint, coordinate]
-    # )
-    o3d.visualization.draw_geometries([pcd, new_mesh, raw_keypoint, coordinate])
-
-    # # combine pose and transformation
-    # S = np.array([[optimal_scale, 0, 0, 0],
-    #               [0, optimal_scale, 0, 0],
-    #               [0, 0, optimal_scale, 0],
-    #               [0, 0, 0, 1]])
-    # M = np.dot(S, world_2_cam)
-    # print('final matrix')
-    # print(np.array2string(M, separator=', '))
-    # print('plane model')
-    # print(np.array2string(plane_model, separator=', '))
-    # print('field of view')
-    # print(np.array2string(field_of_view, separator=', '))
-
-    # import pdb
-
-    # pdb.set_trace()
+    mesh.vertices = np.asarray(final_mesh_world.vertices)[trimesh_indices]
+    mesh.show()
