@@ -184,13 +184,13 @@ def visualize_track(track_data):
     for i in range(frame_num):
         object_pcd = o3d.geometry.PointCloud()
         object_pcd.points = o3d.utility.Vector3dVector(
-            object_points[i, np.where(object_motions_valid[i])[0], :]
+            object_points[i, np.where(object_visibilities[i])[0], :]
         )
         # object_pcd.colors = o3d.utility.Vector3dVector(
         #     object_colors[i, np.where(object_motions_valid[i])[0], :]
         # )
         object_pcd.colors = o3d.utility.Vector3dVector(
-            rainbow_colors[np.where(object_motions_valid[i])[0]]
+            rainbow_colors[np.where(object_visibilities[i])[0]]
         )
 
         if i == 0:

@@ -12,8 +12,8 @@ init_collide_elas: 0.5
 init_collide_fric: 0.3
 collide_object_elas: 0.7
 collide_object_fric: 0.3
-radius: 0.01
-max_neighbours: 20
+radius: 0.02
+max_neighbours: 30
 spring_Y_min: 0
 spring_Y_max: 1e5
 reverse_z: true
@@ -21,9 +21,8 @@ vp_front: [1, 0, -2]
 vp_up: [0, 0, -1]
 vp_zoom: 1
 visualize_ground: false
-collision_dist: 0.01
+collision_dist: 0.02
 collision_learn: true
 chamfer_weight: 1.0
 track_weight: 1.0
 acc_weight: 0.01
-visualize_ground: true
