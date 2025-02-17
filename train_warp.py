@@ -4,6 +4,7 @@ from datetime import datetime
 import random
 import numpy as np
 import torch
+from argparse import ArgumentParser
 
 
 def set_all_seeds(seed):
@@ -113,5 +114,34 @@ if __name__ == "__main__":
     # demo_real()
     # demo_multiple_k()
     # demo_billiard()
-    demo_cloth()
+    # demo_cloth()
     # demo_package()
+
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--base_path",
+        type=str,
+        required=True
+    )
+    parser.add_argument("--case_name", type=str, required=True)
+    args = parser.parse_args()
+
+    base_path = args.base_path
+    case_name = args.case_name
+
+    if "cloth" in case_name or "package" in case_name:
+        cfg.load_from_yaml("configs/cloth.yaml")
+    else:
+        cfg.load_from_yaml("configs/real.yaml")
+
+    print(f"[DATA TYPE]: {cfg.data_type}")
+
+    base_dir = f"experiments/{case_name}"
+    cfg.init_spring_Y = 3e4
+
+    logger.set_log_file(path=base_dir, name="inv_phy_log")
+    trainer = InvPhyTrainerWarp(
+        data_path=f"{base_path}/{case_name}/final_data.pkl",
+        base_dir=base_dir,
+    )
+    trainer.train()

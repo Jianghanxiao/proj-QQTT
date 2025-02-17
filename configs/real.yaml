@@ -7,7 +7,7 @@ drag_damping: 3
 base_lr: 1e-3
 iterations: 250
 vis_interval: 20
-init_spring_Y: 3e3
+init_spring_Y: 3e4
 init_collide_elas: 0.5
 init_collide_fric: 0.3
 collide_object_elas: 0.7
@@ -26,3 +26,4 @@ collision_learn: true
 chamfer_weight: 1.0
 track_weight: 1.0
 acc_weight: 0.01
+visualize_ground: true
