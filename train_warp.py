@@ -124,6 +124,7 @@ if __name__ == "__main__":
         required=True
     )
     parser.add_argument("--case_name", type=str, required=True)
+    parser.add_argument("--train_frame", type=int, required=True)
     args = parser.parse_args()
 
     base_path = args.base_path
@@ -143,5 +144,6 @@ if __name__ == "__main__":
     trainer = InvPhyTrainerWarp(
         data_path=f"{base_path}/{case_name}/final_data.pkl",
         base_dir=base_dir,
+        train_frame=args.train_frame
     )
     trainer.train()

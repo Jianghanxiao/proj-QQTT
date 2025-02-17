@@ -12,13 +12,14 @@ import warp as wp
 
 class InvPhyTrainerWarp:
     def __init__(
-        self, data_path, base_dir, mask_path=None, velocity_path=None, device="cuda:0"
+        self, data_path, base_dir, train_frame, mask_path=None, velocity_path=None, device="cuda:0"
     ):
         cfg.data_path = data_path
         cfg.base_dir = base_dir
         cfg.device = device
         cfg.run_name = base_dir.split("/")[-1]
-
+        cfg.train_frame = train_frame
+        
         self.init_masks = None
         self.init_velocities = None
         # Load the data
@@ -275,7 +276,7 @@ class InvPhyTrainerWarp:
             if cfg.data_type == "real":
                 self.simulator.set_acc_count(False)
             with wp.ScopedTimer("backward"):
-                for j in tqdm(range(1, self.dataset.frame_len)):
+                for j in tqdm(range(1, cfg.train_frame)):
                     self.simulator.set_controller_target(j)
                     if self.simulator.object_collision_flag:
                         self.simulator.update_collision_graph()
@@ -338,11 +339,11 @@ class InvPhyTrainerWarp:
                         self.simulator.wp_states[-1].wp_v,
                     )
 
-            total_loss /= self.dataset.frame_len - 1
+            total_loss /= cfg.train_frame - 1
             if cfg.data_type == "real":
-                total_chamfer_loss /= self.dataset.frame_len - 1
-                total_track_loss /= self.dataset.frame_len - 1
-                total_acc_loss /= self.dataset.frame_len - 2
+                total_chamfer_loss /= cfg.train_frame - 1
+                total_track_loss /= cfg.train_frame - 1
+                total_acc_loss /= cfg.train_frame - 2
             wandb.log(
                 {
                     "loss": total_loss,
