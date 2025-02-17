@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 import time
 import logging
 import json
+import glob
 
 parser = ArgumentParser()
 parser.add_argument(
@@ -162,3 +163,12 @@ if PROCESS_FINAL:
             os.system(
                 f"python ./data_process/data_process_sample.py --base_path {base_path} --case_name {case_name}"
             )
+
+    # Save the train test split
+    frame_len = len(glob.glob(f"{base_path}/{case_name}/pcd/*.npz"))
+    split = {}
+    split["frame_len"] = frame_len
+    split["train"] = [0, int(frame_len * 0.7)]
+    split["test"] = [int(frame_len * 0.7), frame_len]
+    with open(f"{base_path}/{case_name}/split.json", "w") as f:
+        json.dump(split, f)
