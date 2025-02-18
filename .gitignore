@@ -28,6 +28,8 @@ quick_test/
 non_rigid_matching/
 experiments_optimization*/
 quick*
+visualization
+experiments_transfer/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
