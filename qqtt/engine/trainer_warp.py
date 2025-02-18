@@ -8,18 +8,26 @@ import wandb
 import os
 from tqdm import tqdm
 import warp as wp
+import pickle
 
 
 class InvPhyTrainerWarp:
     def __init__(
-        self, data_path, base_dir, train_frame, mask_path=None, velocity_path=None, device="cuda:0"
+        self,
+        data_path,
+        base_dir,
+        train_frame=None,
+        mask_path=None,
+        velocity_path=None,
+        pure_inference_mode=False,
+        device="cuda:0",
     ):
         cfg.data_path = data_path
         cfg.base_dir = base_dir
         cfg.device = device
         cfg.run_name = base_dir.split("/")[-1]
         cfg.train_frame = train_frame
-        
+
         self.init_masks = None
         self.init_velocities = None
         # Load the data
@@ -111,35 +119,36 @@ class InvPhyTrainerWarp:
             self_collision=cfg.self_collision,
         )
 
-        self.optimizer = torch.optim.Adam(
-            [
-                wp.to_torch(self.simulator.wp_spring_Y),
-                wp.to_torch(self.simulator.wp_collide_elas),
-                wp.to_torch(self.simulator.wp_collide_fric),
-                wp.to_torch(self.simulator.wp_collide_object_elas),
-                wp.to_torch(self.simulator.wp_collide_object_fric),
-            ],
-            lr=cfg.base_lr,
-            betas=(0.9, 0.99),
-        )
+        if not pure_inference_mode:
+            self.optimizer = torch.optim.Adam(
+                [
+                    wp.to_torch(self.simulator.wp_spring_Y),
+                    wp.to_torch(self.simulator.wp_collide_elas),
+                    wp.to_torch(self.simulator.wp_collide_fric),
+                    wp.to_torch(self.simulator.wp_collide_object_elas),
+                    wp.to_torch(self.simulator.wp_collide_object_fric),
+                ],
+                lr=cfg.base_lr,
+                betas=(0.9, 0.99),
+            )
 
-        if "debug" not in cfg.run_name:
-            wandb.init(
-                # set the wandb project where this run will be logged
-                project="final_pipeline",
-                name=cfg.run_name,
-                config=cfg.to_dict(),
-            )
-        else:
-            wandb.init(
-                # set the wandb project where this run will be logged
-                project="Debug",
-                name=cfg.run_name,
-                config=cfg.to_dict(),
-            )
-        if not os.path.exists(f"{cfg.base_dir}/train"):
-            # Create directory if it doesn't exist
-            os.makedirs(f"{cfg.base_dir}/train")
+            if "debug" not in cfg.run_name:
+                wandb.init(
+                    # set the wandb project where this run will be logged
+                    project="final_pipeline",
+                    name=cfg.run_name,
+                    config=cfg.to_dict(),
+                )
+            else:
+                wandb.init(
+                    # set the wandb project where this run will be logged
+                    project="Debug",
+                    name=cfg.run_name,
+                    config=cfg.to_dict(),
+                )
+            if not os.path.exists(f"{cfg.base_dir}/train"):
+                # Create directory if it doesn't exist
+                os.makedirs(f"{cfg.base_dir}/train")
 
     def _init_start(
         self,
@@ -189,7 +198,9 @@ class InvPhyTrainerWarp:
                 points = np.concatenate([points, controller_points], axis=0)
                 for i in range(len(controller_points)):
                     [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
-                        controller_points[i], controller_radius, controller_max_neighbours
+                        controller_points[i],
+                        controller_radius,
+                        controller_max_neighbours,
                     )
                     for j in idx:
                         springs.append([num_object_points + i, j])
@@ -447,6 +458,10 @@ class InvPhyTrainerWarp:
         collide_object_fric = checkpoint["collide_object_fric"]
         num_object_springs = checkpoint["num_object_springs"]
 
+        assert (
+            len(spring_Y) == self.simulator.n_springs
+        ), "Check if the loaded checkpoint match the config file to connect the springs"
+
         self.simulator.set_spring_Y(torch.log(spring_Y).detach().clone())
         self.simulator.set_collide(
             collide_elas.detach().clone(), collide_fric.detach().clone()
@@ -456,13 +471,18 @@ class InvPhyTrainerWarp:
         )
 
         # Render the initial visualization
-        video_path = f"{cfg.base_dir}/test.mp4"
-        self.visualize_sim(save_only=True, video_path=video_path)
+        video_path = f"{cfg.base_dir}/inference.mp4"
+        save_path = f"{cfg.base_dir}/inference.pkl"
+        self.visualize_sim(
+            save_only=True,
+            video_path=video_path,
+            save_trajectory=True,
+            save_path=save_path,
+        )
 
-        while True:
-            self.visualize_sim(save_only=False)
-
-    def visualize_sim(self, save_only=True, video_path=None):
+    def visualize_sim(
+        self, save_only=True, video_path=None, save_trajectory=False, save_path=None
+    ):
         logger.info("Visualizing the simulation")
         # Visualize the whole simulation using current set of parameters in the physical simulator
         frame_len = self.dataset.frame_len
@@ -493,6 +513,12 @@ class InvPhyTrainerWarp:
                 )
 
         vertices = torch.stack(vertices, dim=0)
+
+        if save_trajectory:
+            logger.info(f"Save the trajectory to {save_path}")
+            vertices_to_save = vertices.cpu().numpy()
+            with open(save_path, "wb") as f:
+                pickle.dump(vertices_to_save, f)
 
         if not save_only:
             visualize_pc(
