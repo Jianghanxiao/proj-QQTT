@@ -22,7 +22,6 @@ set_all_seeds(seed)
 
 def test_real():
     cfg.load_from_yaml("configs/real.yaml")
-    cfg.visualize_ground = True
     print(f"[DATA TYPE]: {cfg.data_type}")
 
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")

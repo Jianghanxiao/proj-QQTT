@@ -74,8 +74,10 @@ class InvPhyTrainerWarp:
         ) = self._init_start(
             self.structure_points,
             firt_frame_controller_points,
-            radius=cfg.radius,
-            max_neighbours=cfg.max_neighbours,
+            object_radius=cfg.object_radius,
+            object_max_neighbours=cfg.object_max_neighbours,
+            controller_radius=cfg.controller_radius,
+            controller_max_neighbours=cfg.controller_max_neighbours,
             mask=self.init_masks,
         )
 
@@ -87,8 +89,8 @@ class InvPhyTrainerWarp:
             dt=cfg.dt,
             num_substeps=cfg.num_substeps,
             spring_Y=cfg.init_spring_Y,
-            collide_elas=cfg.init_collide_elas,
-            collide_fric=cfg.init_collide_fric,
+            collide_elas=cfg.collide_elas,
+            collide_fric=cfg.collide_fric,
             dashpot_damping=cfg.dashpot_damping,
             drag_damping=cfg.drag_damping,
             collide_object_elas=cfg.collide_object_elas,
@@ -143,8 +145,10 @@ class InvPhyTrainerWarp:
         self,
         object_points,
         controller_points,
-        radius=0.01,
-        max_neighbours=20,
+        object_radius=0.02,
+        object_max_neighbours=30,
+        controller_radius=0.04,
+        controller_max_neighbours=50,
         mask=None,
     ):
         object_points = object_points.cpu().numpy()
@@ -162,7 +166,7 @@ class InvPhyTrainerWarp:
             rest_lengths = []
             for i in range(len(points)):
                 [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
-                    points[i], radius, max_neighbours
+                    points[i], object_radius, object_max_neighbours
                 )
                 idx = idx[1:]
                 for j in idx:
@@ -185,7 +189,7 @@ class InvPhyTrainerWarp:
                 points = np.concatenate([points, controller_points], axis=0)
                 for i in range(len(controller_points)):
                     [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
-                        controller_points[i], radius * 2, max_neighbours * 4
+                        controller_points[i], controller_radius, controller_max_neighbours
                     )
                     for j in idx:
                         springs.append([num_object_points + i, j])
@@ -222,7 +226,7 @@ class InvPhyTrainerWarp:
                 temp_rest_lengths = []
                 for i in range(len(temp_points)):
                     [k, idx, _] = temp_tree.search_hybrid_vector_3d(
-                        temp_points[i], radius, max_neighbours
+                        temp_points[i], object_radius, object_max_neighbours
                     )
                     idx = idx[1:]
                     for j in idx:

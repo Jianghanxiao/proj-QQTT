@@ -56,6 +56,7 @@ def demo_cloth():
     )
     trainer.train()
 
+
 def demo_package():
     cfg.load_from_yaml("configs/cloth.yaml")
     print(f"[DATA TYPE]: {cfg.data_type}")
@@ -63,15 +64,13 @@ def demo_package():
     # current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     # base_dir = f"experiments/{current_time}"
     base_dir = f"experiments/debug_package"
-    # cfg.init_spring_Y = 3e4
-    # cfg.radius = 0.02
-    # cfg.max_neighbours = 30
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainerWarp(
         data_path=f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types/weird_package/final_data.pkl",
         base_dir=base_dir,
     )
     trainer.train()
+
 
 def demo_multiple_k():
     cfg.load_from_yaml("configs/synthetic.yaml")
@@ -118,17 +117,14 @@ if __name__ == "__main__":
     # demo_package()
 
     parser = ArgumentParser()
-    parser.add_argument(
-        "--base_path",
-        type=str,
-        required=True
-    )
+    parser.add_argument("--base_path", type=str, required=True)
     parser.add_argument("--case_name", type=str, required=True)
     parser.add_argument("--train_frame", type=int, required=True)
     args = parser.parse_args()
 
     base_path = args.base_path
     case_name = args.case_name
+    train_frame = args.train_frame
 
     if "cloth" in case_name or "package" in case_name:
         cfg.load_from_yaml("configs/cloth.yaml")
@@ -138,12 +134,11 @@ if __name__ == "__main__":
     print(f"[DATA TYPE]: {cfg.data_type}")
 
     base_dir = f"experiments/{case_name}"
-    cfg.init_spring_Y = 3e4
 
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainerWarp(
         data_path=f"{base_path}/{case_name}/final_data.pkl",
         base_dir=base_dir,
-        train_frame=args.train_frame
+        train_frame=train_frame,
     )
     trainer.train()

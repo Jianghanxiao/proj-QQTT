@@ -5,6 +5,7 @@ from typing import Optional
 
 from .misc import singleton, master_only
 from termcolor import colored
+import sys
 
 
 class Formatter(logging.Formatter):
@@ -24,31 +25,65 @@ class Formatter(logging.Formatter):
 class SteamFormatter(Formatter):
 
     FORMATS = {
-        logging.DEBUG:
-            colored(Formatter.msg_str, "cyan"),
-        logging.INFO:
-            colored(" ".join([Formatter.time_str, Formatter.level_str, ""]), "white", attrs=["dark"]) + \
-            colored(Formatter.msg_str, "white"),
-        logging.WARNING:
-            colored(" ".join([Formatter.time_str, Formatter.level_str, ""]), "yellow", attrs=["dark"]) + \
-            colored(Formatter.msg_str, "yellow"),
-        logging.ERROR:
-            colored(" ".join([Formatter.time_str, Formatter.level_str, ""]), "red", attrs=["dark"]) + \
-            colored(Formatter.msg_str, "red") + colored(" " + Formatter.file_str, "red", attrs=["dark"]),
-        logging.CRITICAL:
-            colored(" ".join([Formatter.time_str, Formatter.level_str, ""]), "red", attrs=["dark", "bold"]) +\
-            colored(Formatter.msg_str, "red", attrs=["bold"],) +\
-            colored(" " + Formatter.file_str, "red", attrs=["dark", "bold"]),
+        logging.DEBUG: colored(Formatter.msg_str, "cyan"),
+        logging.INFO: colored(
+            " ".join([Formatter.time_str, Formatter.level_str, ""]),
+            "white",
+            attrs=["dark"],
+        )
+        + colored(Formatter.msg_str, "white"),
+        logging.WARNING: colored(
+            " ".join([Formatter.time_str, Formatter.level_str, ""]),
+            "yellow",
+            attrs=["dark"],
+        )
+        + colored(Formatter.msg_str, "yellow"),
+        logging.ERROR: colored(
+            " ".join([Formatter.time_str, Formatter.level_str, ""]),
+            "red",
+            attrs=["dark"],
+        )
+        + colored(Formatter.msg_str, "red")
+        + colored(" " + Formatter.file_str, "red", attrs=["dark"]),
+        logging.CRITICAL: colored(
+            " ".join([Formatter.time_str, Formatter.level_str, ""]),
+            "red",
+            attrs=["dark", "bold"],
+        )
+        + colored(
+            Formatter.msg_str,
+            "red",
+            attrs=["bold"],
+        )
+        + colored(" " + Formatter.file_str, "red", attrs=["dark", "bold"]),
     }
 
 
 class FileFormatter(Formatter):
 
     FORMATS = {
-        logging.INFO: " ".join([Formatter.time_str, Formatter.level_str, Formatter.msg_str]),
-        logging.WARNING: " ".join([Formatter.time_str, Formatter.level_str, Formatter.msg_str]),
-        logging.ERROR: " ".join([Formatter.time_str, Formatter.level_str, Formatter.msg_str, Formatter.file_str]),
-        logging.CRITICAL: " ".join([Formatter.time_str, Formatter.level_str, Formatter.msg_str, Formatter.file_str]),
+        logging.INFO: " ".join(
+            [Formatter.time_str, Formatter.level_str, Formatter.msg_str]
+        ),
+        logging.WARNING: " ".join(
+            [Formatter.time_str, Formatter.level_str, Formatter.msg_str]
+        ),
+        logging.ERROR: " ".join(
+            [
+                Formatter.time_str,
+                Formatter.level_str,
+                Formatter.msg_str,
+                Formatter.file_str,
+            ]
+        ),
+        logging.CRITICAL: " ".join(
+            [
+                Formatter.time_str,
+                Formatter.level_str,
+                Formatter.msg_str,
+                Formatter.file_str,
+            ]
+        ),
     }
 
 
@@ -79,7 +114,9 @@ class ExpLogger(logging.Logger):
     def set_log_file(self, path: str, name: Optional[str] = None):
         if not os.path.exists(path):
             os.makedirs(path)
-        file_path = os.path.join(path, f"{self.name}.log" if name is None else f"{name}.log")
+        file_path = os.path.join(
+            path, f"{self.name}.log" if name is None else f"{name}.log"
+        )
         self.filehandler = logging.FileHandler(file_path)
         self.filehandler.setFormatter(FileFormatter())
         self.filehandler.setLevel(logging.INFO)
@@ -107,3 +144,19 @@ class ExpLogger(logging.Logger):
 
 
 logger = ExpLogger()
+
+class StreamToLogger():
+    def __init__(self, logger, log_level):
+        super().__init__()
+        self.logger = logger
+        self.log_level = log_level
+
+    def write(self, message):
+        if message.strip():
+            self.logger.log(self.log_level, message.strip())
+
+    def flush(self):
+        pass
+
+sys.stdout = StreamToLogger(logger, logging.INFO)
+sys.stderr = StreamToLogger(logger, logging.ERROR)

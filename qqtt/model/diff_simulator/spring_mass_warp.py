@@ -582,7 +582,7 @@ class SpringMassSystemWarp:
         collide_object_elas=0.7,
         collide_object_fric=0.3,
         init_masks=None,
-        collision_dist=0.06,
+        collision_dist=0.02,
         init_velocities=None,
         num_object_points=None,
         num_surface_points=None,
@@ -595,6 +595,7 @@ class SpringMassSystemWarp:
         gt_object_visibilities=None,
         gt_object_motions_valid=None,
         self_collision=False,
+        disable_backward=False,
     ):
         logger.info(f"[SIMULATION]: Initialize the Spring-Mass System")
         self.device = cfg.device
@@ -765,21 +766,31 @@ class SpringMassSystemWarp:
         # Create the CUDA graph to acclerate
         if cfg.use_graph:
             if cfg.data_type == "real":
-                with wp.ScopedCapture() as capture:
-                    self.tape = wp.Tape()
-                    with self.tape:
+                if not disable_backward:
+                    with wp.ScopedCapture() as capture:
+                        self.tape = wp.Tape()
+                        with self.tape:
+                            self.step()
+                            self.calculate_loss()
+                        self.tape.backward(self.loss)
+                else:
+                    with wp.ScopedCapture() as capture:
                         self.step()
                         self.calculate_loss()
-                    self.tape.backward(self.loss)
                 self.graph = capture.graph
             elif cfg.data_type == "synthetic":
-                # For synthetic data, we compute simple loss
-                with wp.ScopedCapture() as capture:
-                    self.tape = wp.Tape()
-                    with self.tape:
+                if not disable_backward:
+                    # For synthetic data, we compute simple loss
+                    with wp.ScopedCapture() as capture:
+                        self.tape = wp.Tape()
+                        with self.tape:
+                            self.step()
+                            self.calculate_simple_loss()
+                        self.tape.backward(self.loss)
+                else:
+                    with wp.ScopedCapture() as capture:
                         self.step()
                         self.calculate_simple_loss()
-                    self.tape.backward(self.loss)
                 self.graph = capture.graph
             else:
                 raise NotImplementedError

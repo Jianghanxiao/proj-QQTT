@@ -16,13 +16,15 @@ class Config:
         self.iterations = 250
         self.vis_interval = 10
         self.init_spring_Y = 3e3
-        self.init_collide_elas = 0.5
-        self.init_collide_fric = 0.3
+        self.collide_elas = 0.5
+        self.collide_fric = 0.3
         self.collide_object_elas = 0.7
         self.collide_object_fric = 0.3
 
-        self.radius = 0.01
-        self.max_neighbours = 20
+        self.object_radius = 0.02
+        self.object_max_neighbours = 30
+        self.controller_radius = 0.04
+        self.controller_max_neighbours = 50
 
         self.spring_Y_min = 0
         self.spring_Y_max = 1e5

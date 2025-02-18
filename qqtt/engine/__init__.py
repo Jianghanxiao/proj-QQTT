@@ -1,2 +1,2 @@
-# from .cma_collision import InvPhyTrainerCMA
+from .cma_optimize_warp import OptimizerCMA
 from .trainer_warp import InvPhyTrainerWarp
