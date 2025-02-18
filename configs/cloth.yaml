@@ -5,7 +5,7 @@ num_substeps: 667
 dashpot_damping: 100
 drag_damping: 3
 base_lr: 1e-3
-iterations: 50
+iterations: 100
 vis_interval: 20
 init_spring_Y: 3e4
 collide_elas: 0.5
