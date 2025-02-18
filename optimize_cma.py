@@ -25,11 +25,13 @@ if __name__ == "__main__":
     parser.add_argument("--base_path", type=str, required=True)
     parser.add_argument("--case_name", type=str, required=True)
     parser.add_argument("--train_frame", type=int, required=True)
+    parser.add_argument("--max_iter", type=int, default=20)
     args = parser.parse_args()
 
     base_path = args.base_path
     case_name = args.case_name
     train_frame = args.train_frame
+    max_iter = args.max_iter
 
     if "cloth" in case_name or "package" in case_name:
         cfg.load_from_yaml("configs/cloth.yaml")
@@ -44,4 +46,4 @@ if __name__ == "__main__":
         base_dir=base_dir,
         train_frame=train_frame,
     )
-    optimizer.optimize(max_iter=20)
+    optimizer.optimize(max_iter=max_iter)
