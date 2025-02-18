@@ -368,7 +368,13 @@ class OptimizerCMA:
             self.simulator.set_acc_count(False)
 
         total_loss = 0.0
-        for j in range(1, cfg.train_frame):
+        if not visualize:
+            # Only optimize on the train frames
+            max_frame = cfg.train_frame
+        else:
+            max_frame = self.dataset.frame_len
+
+        for j in range(1, max_frame):
             self.simulator.set_controller_target(j)
             if self.simulator.object_collision_flag:
                 self.simulator.update_collision_graph()

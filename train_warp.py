@@ -5,6 +5,8 @@ import random
 import numpy as np
 import torch
 from argparse import ArgumentParser
+import os
+import pickle
 
 
 def set_all_seeds(seed):
@@ -134,6 +136,13 @@ if __name__ == "__main__":
     print(f"[DATA TYPE]: {cfg.data_type}")
 
     base_dir = f"experiments/{case_name}"
+
+    # Read the first-satage optimized parameters
+    optimal_path = f"experiments_optimization/{case_name}/optimal_params.pkl"
+    assert os.path.exists(optimal_path), f"{case_name}: Optimal parameters not found: {optimal_path}"
+    with open(optimal_path, "rb") as f:
+        optimal_params = pickle.load(f)
+    cfg.set_optimal_params(optimal_params)
 
     logger.set_log_file(path=base_dir, name="inv_phy_log")
     trainer = InvPhyTrainerWarp(

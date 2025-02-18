@@ -71,5 +71,9 @@ class Config:
             config_dict = yaml.safe_load(file)
         self.update_from_dict(config_dict)
 
+    def set_optimal_params(self, optimal_params):
+        optimal_params["init_spring_Y"] = optimal_params.pop("global_spring_Y")
+        self.update_from_dict(optimal_params)
+
 
 cfg = Config()

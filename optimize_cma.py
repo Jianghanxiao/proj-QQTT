@@ -1,8 +1,10 @@
 # The first stage to optimize the sparse parameters using CMA-ES
 from qqtt import OptimizerCMA
 from qqtt.utils import logger, cfg
+from qqtt.utils.logger import StreamToLogger, logging
 import random
 import numpy as np
+import sys
 import torch
 from argparse import ArgumentParser
 
@@ -19,6 +21,9 @@ def set_all_seeds(seed):
 
 seed = 42
 set_all_seeds(seed)
+
+sys.stdout = StreamToLogger(logger, logging.INFO)
+sys.stderr = StreamToLogger(logger, logging.ERROR)
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -38,7 +43,7 @@ if __name__ == "__main__":
     else:
         cfg.load_from_yaml("configs/real.yaml")
 
-    base_dir = f"experiments/{case_name}"
+    base_dir = f"experiments_optimization/{case_name}"
     logger.set_log_file(path=base_dir, name="optimize_cma_log")
 
     optimizer = OptimizerCMA(

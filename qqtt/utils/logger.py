@@ -157,6 +157,3 @@ class StreamToLogger():
 
     def flush(self):
         pass
-
-sys.stdout = StreamToLogger(logger, logging.INFO)
-sys.stderr = StreamToLogger(logger, logging.ERROR)

@@ -26,6 +26,8 @@ real_data/
 data_process/TRELLIS
 quick_test/
 non_rigid_matching/
+experiments_optimization*/
+quick*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

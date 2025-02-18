@@ -126,7 +126,7 @@ class InvPhyTrainerWarp:
         if "debug" not in cfg.run_name:
             wandb.init(
                 # set the wandb project where this run will be logged
-                project="train_split",
+                project="final_pipeline",
                 name=cfg.run_name,
                 config=cfg.to_dict(),
             )
