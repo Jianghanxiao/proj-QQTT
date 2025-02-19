@@ -22,7 +22,6 @@ reverse_z: true
 vp_front: [1, 0, -2]
 vp_up: [0, 0, -1]
 vp_zoom: 1
-visualize_ground: false
 collision_dist: 0.02
 collision_learn: true
 chamfer_weight: 1.0

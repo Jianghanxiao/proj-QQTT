@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 import glob
 import os
 import pickle
+import json
 
 
 def set_all_seeds(seed):
@@ -89,6 +90,18 @@ if __name__ == "__main__":
     with open(optimal_path, "rb") as f:
         optimal_params = pickle.load(f)
     cfg.set_optimal_params(optimal_params)
+
+    # Set the intrinsic and extrinsic parameters for visualization
+    with open(f"{base_path}/{case_name}/calibrate.pkl", "rb") as f:
+        c2ws = pickle.load(f)
+    w2cs = [np.linalg.inv(c2w) for c2w in c2ws]
+    cfg.c2ws = np.array(c2ws)
+    cfg.w2cs = np.array(w2cs)
+    with open(f"{base_path}/{case_name}/metadata.json", "r") as f:
+        data = json.load(f)
+    cfg.intrinsics = np.array(data["intrinsics"])
+    cfg.WH = data["WH"]
+    cfg.overlay_path = f"{base_path}/{case_name}/color"
 
     logger.set_log_file(path=base_dir, name="inference_log")
     trainer = InvPhyTrainerWarp(

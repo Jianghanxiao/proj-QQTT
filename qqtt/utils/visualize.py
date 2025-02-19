@@ -4,6 +4,8 @@ import torch
 import time
 import cv2
 from .config import cfg
+import pyrender
+import trimesh
 
 
 def visualize_pc(
@@ -15,8 +17,13 @@ def visualize_pc(
     visualize=True,
     save_video=False,
     save_path=None,
+    vis_cam_idx=0,
 ):
+    # Deprecated function, use visualize_pc instead
     FPS = cfg.FPS
+    width, height = cfg.WH
+    intrinsic = cfg.intrinsics[vis_cam_idx]
+    w2c = cfg.w2cs[vis_cam_idx]
 
     # Convert the stuffs to numpy if it's tensor
     if isinstance(object_points, torch.Tensor):
@@ -40,35 +47,27 @@ def visualize_pc(
             object_colors = np.concatenate(
                 [
                     object_colors,
-                    np.zeros(
+                    np.ones(
                         (
                             object_colors.shape[0],
                             object_points.shape[1] - object_colors.shape[1],
                             3,
                         )
-                    ),
+                    )
+                    * 0.3,
                 ],
                 axis=1,
             )
 
     # The pcs is a 4d pcd numpy array with shape (n_frames, n_points, 3)
     vis = o3d.visualization.Visualizer()
-    vis.create_window(visible=visualize)
+    vis.create_window(visible=visualize, width=width, height=height)
 
     if save_video and visualize:
         raise ValueError("Cannot save video and visualize at the same time.")
 
     # Initialize video writer if save_video is True
     if save_video:
-        # Create a dummy frame to get the width and height
-        dummy_frame = np.asarray(vis.capture_screen_float_buffer(do_render=True))
-        height, width, _ = dummy_frame.shape
-
-        if height <= 0 or width <= 0:
-            raise ValueError(
-                "Invalid dimensions for the video. Check the frame capture."
-            )
-
         fourcc = cv2.VideoWriter_fourcc(*"avc1")  # Codec for .mp4 file format
         video_writer = cv2.VideoWriter(save_path, fourcc, FPS, (width, height))
 
@@ -98,30 +97,22 @@ def visualize_pc(
                     controller_mesh = o3d.geometry.TriangleMesh.create_sphere(
                         radius=0.01
                     ).translate(origin)
+                    controller_mesh.compute_vertex_normals()
                     controller_mesh.paint_uniform_color(origin_color)
                     controller_meshes.append(controller_mesh)
                     vis.add_geometry(controller_meshes[-1])
                     prev_center.append(origin)
-            if cfg.visualize_ground:
-                # Define ground plane vertices
-                ground_vertices = np.array(
-                    [[10, 10, 0], [10, -10, 0], [-10, -10, 0], [-10, 10, 0]]
-                )
-                # Define ground plane triangular faces
-                if cfg.reverse_z:
-                    ground_triangles = np.array([[0, 1, 2], [0, 2, 3]])
-                else:
-                    ground_triangles = np.array([[0, 2, 1], [0, 3, 2]])
-                ground_mesh = o3d.geometry.TriangleMesh()
-                ground_mesh.vertices = o3d.utility.Vector3dVector(ground_vertices)
-                ground_mesh.triangles = o3d.utility.Vector3iVector(ground_triangles)
-                ground_mesh.paint_uniform_color([1, 211 / 255, 139 / 255])
-                vis.add_geometry(ground_mesh)
             # Adjust the viewpoint
             view_control = vis.get_view_control()
-            view_control.set_front(cfg.vp_front)
-            view_control.set_up(cfg.vp_up)
-            view_control.set_zoom(cfg.vp_zoom)
+            camera_params = o3d.camera.PinholeCameraParameters()
+            intrinsic_parameter = o3d.camera.PinholeCameraIntrinsic(
+                width, height, intrinsic
+            )
+            camera_params.intrinsic = intrinsic_parameter
+            camera_params.extrinsic = w2c
+            view_control.convert_from_pinhole_camera_parameters(
+                camera_params, allow_arbitrary=True
+            )
         else:
             render_object_pcd.points = o3d.utility.Vector3dVector(object_pcd.points)
             render_object_pcd.colors = o3d.utility.Vector3dVector(object_pcd.colors)
@@ -132,13 +123,20 @@ def visualize_pc(
                     controller_meshes[j].translate(origin - prev_center[j])
                     vis.update_geometry(controller_meshes[j])
                     prev_center[j] = origin
-            vis.poll_events()
-            vis.update_renderer()
+        vis.poll_events()
+        vis.update_renderer()
 
         # Capture frame and write to video file if save_video is True
         if save_video:
             frame = np.asarray(vis.capture_screen_float_buffer(do_render=True))
             frame = (frame * 255).astype(np.uint8)
+            if cfg.overlay_path is not None:
+                # Get the mask where the pixel is white
+                mask = np.all(frame == [255, 255, 255], axis=-1)
+                image_path = f"{cfg.overlay_path}/{vis_cam_idx}/{i}.png"
+                overlay = cv2.imread(image_path)
+                overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+                frame[mask] = overlay[mask]
             # Convert RGB to BGR
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             video_writer.write(frame)

@@ -30,7 +30,6 @@ class Config:
         self.spring_Y_max = 1e5
 
         self.reverse_z = True
-        self.visualize_ground = False
         self.vp_front = [1, 0, -2]
         self.vp_up = [0, 0, -1]
         self.vp_zoom = 1
@@ -47,6 +46,9 @@ class Config:
         self.chamfer_weight = 1.0
         self.track_weight = 1.0
         self.acc_weight = 0.01
+
+        # Other parameters for visualization
+        self.overlay_path = None
 
     def to_dict(self):
         # Convert the class to dictionary

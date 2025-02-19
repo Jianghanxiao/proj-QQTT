@@ -6,6 +6,8 @@ import random
 import numpy as np
 import sys
 import torch
+import pickle
+import json
 from argparse import ArgumentParser
 
 
@@ -44,8 +46,20 @@ if __name__ == "__main__":
         cfg.load_from_yaml("configs/real.yaml")
 
     base_dir = f"experiments_optimization/{case_name}"
-    logger.set_log_file(path=base_dir, name="optimize_cma_log")
 
+    # Set the intrinsic and extrinsic parameters for visualization
+    with open(f"{base_path}/{case_name}/calibrate.pkl", "rb") as f:
+        c2ws = pickle.load(f)
+    w2cs = [np.linalg.inv(c2w) for c2w in c2ws]
+    cfg.c2ws = np.array(c2ws)
+    cfg.w2cs = np.array(w2cs)
+    with open(f"{base_path}/{case_name}/metadata.json", "r") as f:
+        data = json.load(f)
+    cfg.intrinsics = np.array(data["intrinsics"])
+    cfg.WH = data["WH"]
+    cfg.overlay_path = f"{base_path}/{case_name}/color"
+
+    logger.set_log_file(path=base_dir, name="optimize_cma_log")
     optimizer = OptimizerCMA(
         data_path=f"{base_path}/{case_name}/final_data.pkl",
         base_dir=base_dir,
