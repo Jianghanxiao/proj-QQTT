@@ -135,7 +135,7 @@ class InvPhyTrainerWarp:
             if "debug" not in cfg.run_name:
                 wandb.init(
                     # set the wandb project where this run will be logged
-                    project="final_pipeline",
+                    project="final_pipeline_without_acc_regularization",
                     name=cfg.run_name,
                     config=cfg.to_dict(),
                 )
@@ -284,12 +284,12 @@ class InvPhyTrainerWarp:
             if cfg.data_type == "real":
                 total_chamfer_loss = 0.0
                 total_track_loss = 0.0
-                total_acc_loss = 0.0
+                # total_acc_loss = 0.0
             self.simulator.set_init_state(
                 self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
             )
-            if cfg.data_type == "real":
-                self.simulator.set_acc_count(False)
+            # if cfg.data_type == "real":
+            #     self.simulator.set_acc_count(False)
             with wp.ScopedTimer("backward"):
                 for j in tqdm(range(1, cfg.train_frame)):
                     self.simulator.set_controller_target(j)
@@ -322,21 +322,21 @@ class InvPhyTrainerWarp:
                         total_chamfer_loss += chamfer_loss.item()
                         total_track_loss += track_loss.item()
 
-                        if (
-                            wp.to_torch(self.simulator.acc_count, requires_grad=False)[
-                                0
-                            ]
-                            == 1
-                        ):
-                            acc_loss = wp.to_torch(
-                                self.simulator.acc_loss, requires_grad=False
-                            )
-                            total_acc_loss += acc_loss.item()
-                        else:
-                            self.simulator.set_acc_count(True)
+                        # if (
+                        #     wp.to_torch(self.simulator.acc_count, requires_grad=False)[
+                        #         0
+                        #     ]
+                        #     == 1
+                        # ):
+                        #     acc_loss = wp.to_torch(
+                        #         self.simulator.acc_loss, requires_grad=False
+                        #     )
+                        #     total_acc_loss += acc_loss.item()
+                        # else:
+                        #     self.simulator.set_acc_count(True)
 
-                        # Update the prev_acc used to calculate the acceleration loss
-                        self.simulator.update_acc()
+                        # # Update the prev_acc used to calculate the acceleration loss
+                        # self.simulator.update_acc()
 
                     loss = wp.to_torch(self.simulator.loss, requires_grad=False)
                     total_loss += loss.item()
@@ -358,7 +358,7 @@ class InvPhyTrainerWarp:
             if cfg.data_type == "real":
                 total_chamfer_loss /= cfg.train_frame - 1
                 total_track_loss /= cfg.train_frame - 1
-                total_acc_loss /= cfg.train_frame - 2
+                # total_acc_loss /= cfg.train_frame - 2
             wandb.log(
                 {
                     "loss": total_loss,
@@ -366,7 +366,7 @@ class InvPhyTrainerWarp:
                         total_chamfer_loss if cfg.data_type == "real" else 0
                     ),
                     "track_loss": total_track_loss if cfg.data_type == "real" else 0,
-                    "acc_loss": total_acc_loss if cfg.data_type == "real" else 0,
+                    # "acc_loss": total_acc_loss if cfg.data_type == "real" else 0,
                     "collide_else": wp.to_torch(
                         self.simulator.wp_collide_elas, requires_grad=False
                     ).item(),
