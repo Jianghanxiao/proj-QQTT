@@ -30,6 +30,7 @@ experiments_optimization*/
 quick*
 visualization
 experiments_transfer/
+results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
