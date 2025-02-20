@@ -75,11 +75,15 @@ def filter_track(track_path, pcd_path, mask_path, frame_num, num_cam):
             # Filter based on object_mask
             object_mask = processed_masks[frame_idx][i]["object"]
             for j in range(num_points):
-                if track_object_idx[j] == 1 and visibility[frame_idx, j] == 1:
-                    if not object_mask[
-                        tracks[frame_idx, j, 0], tracks[frame_idx, j, 1]
-                    ]:
-                        visibility[frame_idx, j] = 0
+                try:
+                    if track_object_idx[j] == 1 and visibility[frame_idx, j] == 1:
+                        if not object_mask[
+                            tracks[frame_idx, j, 0], tracks[frame_idx, j, 1]
+                        ]:
+                            visibility[frame_idx, j] = 0
+                except:
+                    # Sometimes the track coordinate is out of image
+                    visibility[frame_idx, j] = 0
             # Filter based on controller_mask
             controller_mask = processed_masks[frame_idx][i]["controller"]
             for j in range(num_points):

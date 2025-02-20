@@ -11,3 +11,9 @@ single_lift_sloth,sloth,True
 single_lift_zebra,toy,True
 single_push_rope,twine,True
 single_push_sloth,sloth,True
+single_lift_cloth_1,cloth,False
+single_lift_cloth_2,cloth,False
+single_lift_cloth_3,cloth,False
+single_lift_cloth_4,cloth,False
+single_push_rope_1,twine,True
+single_push_rope_4,twine,True

@@ -18,11 +18,11 @@ parser.add_argument("--shape_prior", action="store_true", default=False)
 args = parser.parse_args()
 
 # Set the debug flags
-PROCESS_SEG = False
-PROCESS_SHAPE_PRIOR = False
-PROCESS_TRACK = False
-PROCESS_3D = False
-PROCESS_ALIGN = False
+PROCESS_SEG = True
+PROCESS_SHAPE_PRIOR = True
+PROCESS_TRACK = True
+PROCESS_3D = True
+PROCESS_ALIGN = True
 PROCESS_FINAL = True
 
 base_path = args.base_path
