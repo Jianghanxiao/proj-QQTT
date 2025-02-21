@@ -446,29 +446,30 @@ class InvPhyTrainerWarp:
 
         wandb.finish()
 
-    def test(self, model_path):
-        # Load the model
-        logger.info(f"Load model from {model_path}")
-        checkpoint = torch.load(model_path, map_location=cfg.device)
+    def test(self, model_path=None):
+        if model_path is not None:
+            # Load the model
+            logger.info(f"Load model from {model_path}")
+            checkpoint = torch.load(model_path, map_location=cfg.device)
 
-        spring_Y = checkpoint["spring_Y"]
-        collide_elas = checkpoint["collide_elas"]
-        collide_fric = checkpoint["collide_fric"]
-        collide_object_elas = checkpoint["collide_object_elas"]
-        collide_object_fric = checkpoint["collide_object_fric"]
-        num_object_springs = checkpoint["num_object_springs"]
+            spring_Y = checkpoint["spring_Y"]
+            collide_elas = checkpoint["collide_elas"]
+            collide_fric = checkpoint["collide_fric"]
+            collide_object_elas = checkpoint["collide_object_elas"]
+            collide_object_fric = checkpoint["collide_object_fric"]
+            num_object_springs = checkpoint["num_object_springs"]
 
-        assert (
-            len(spring_Y) == self.simulator.n_springs
-        ), "Check if the loaded checkpoint match the config file to connect the springs"
+            assert (
+                len(spring_Y) == self.simulator.n_springs
+            ), "Check if the loaded checkpoint match the config file to connect the springs"
 
-        self.simulator.set_spring_Y(torch.log(spring_Y).detach().clone())
-        self.simulator.set_collide(
-            collide_elas.detach().clone(), collide_fric.detach().clone()
-        )
-        self.simulator.set_collide_object(
-            collide_object_elas.detach().clone(), collide_object_fric.detach().clone()
-        )
+            self.simulator.set_spring_Y(torch.log(spring_Y).detach().clone())
+            self.simulator.set_collide(
+                collide_elas.detach().clone(), collide_fric.detach().clone()
+            )
+            self.simulator.set_collide_object(
+                collide_object_elas.detach().clone(), collide_object_fric.detach().clone()
+            )
 
         # Render the initial visualization
         video_path = f"{cfg.base_dir}/inference.mp4"
