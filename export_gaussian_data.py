@@ -58,6 +58,14 @@ with open("data_config.csv", newline="", encoding="utf-8") as csvfile:
                 f"cp {base_path}/{case_name}/depth/{i}/0.npy {output_path}/{case_name}/{i}_depth.npy"
             )
 
+            # Prepare the human mask for the low-resolution image and high-resolution image
+            os.system(
+                f"python ./data_process/segment_util_image.py --img_path {output_path}/{case_name}/{i}.png --TEXT_PROMPT 'human' --output_path {output_path}/{case_name}/mask_human_{i}.png"
+            )
+            os.system(
+                f"python ./data_process/segment_util_image.py --img_path {output_path}/{case_name}/{i}_high.png --TEXT_PROMPT 'human' --output_path {output_path}/{case_name}/mask_human_{i}_high.png"
+            )
+
         # Prepare the intrinsic and extrinsic parameters
         with open(f"{base_path}/{case_name}/calibrate.pkl", "rb") as f:
             c2ws = pickle.load(f)
