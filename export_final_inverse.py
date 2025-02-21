@@ -3,9 +3,10 @@ import os
 
 # base_path = "/data/proj-qqtt/processed_data/rope_variants"
 # output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants_final"
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
+# base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/more_additional"
 output_path = (
-    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types_final"
+    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/more_additional_final"
 )
 
 ADD_VIS = False

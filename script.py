@@ -1,7 +1,7 @@
 import os
 import csv
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/more_additional"
 
 os.system("rm -f timer.log")
 
