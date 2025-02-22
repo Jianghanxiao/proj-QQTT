@@ -34,7 +34,7 @@ if __name__ == "__main__":
     base_path = args.base_path
     case_name = args.case_name
 
-    if "cloth" in case_name or "package" in case_name or "veg" in case_name:
+    if "cloth" in case_name or "package" in case_name:
         cfg.load_from_yaml("configs/cloth.yaml")
     else:
         cfg.load_from_yaml("configs/real.yaml")
