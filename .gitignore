@@ -32,6 +32,7 @@ visualization
 experiments_transfer/
 results/
 *.csv
+experiments*/
 
 
 # Byte-compiled / optimized / DLL files

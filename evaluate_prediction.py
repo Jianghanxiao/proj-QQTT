@@ -10,10 +10,10 @@ from pytorch3d.loss import chamfer_distance
 #     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments"
 # )
 prediction_dir = (
-    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments_optimization"
+    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments"
 )
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
-output_file = "results/final_results_optimization.csv"
+output_file = "results/final_results.csv"
 
 
 def evaluate_prediction(

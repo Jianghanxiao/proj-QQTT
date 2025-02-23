@@ -4,9 +4,9 @@ import os
 # base_path = "/data/proj-qqtt/processed_data/rope_variants"
 # output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/rope_variants_final"
 # base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/more_additional"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
 output_path = (
-    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/more_additional_final"
+    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types_gnn"
 )
 
 ADD_VIS = False
@@ -31,9 +31,9 @@ for dir_name in dir_names:
         os.system(
             f"cp {dir_name}/final_data.mp4 {output_path}/{case_name}/final_data.mp4"
         )
-    # Copy the color dir for better visualization during training
-    existDir(f"{output_path}/{case_name}/color")
-    os.system(f"cp -r {dir_name}/color/0 {output_path}/{case_name}/color/0")
-    # Copy the intrinsic and extrinsic parameters
-    os.system(f"cp {dir_name}/calibrate.pkl {output_path}/{case_name}/calibrate.pkl")
-    os.system(f"cp {dir_name}/metadata.json {output_path}/{case_name}/metadata.json")
+    # # Copy the color dir for better visualization during training
+    # existDir(f"{output_path}/{case_name}/color")
+    # os.system(f"cp -r {dir_name}/color/0 {output_path}/{case_name}/color/0")
+    # # Copy the intrinsic and extrinsic parameters
+    # os.system(f"cp {dir_name}/calibrate.pkl {output_path}/{case_name}/calibrate.pkl")
+    # os.system(f"cp {dir_name}/metadata.json {output_path}/{case_name}/metadata.json")
