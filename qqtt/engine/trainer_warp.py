@@ -546,7 +546,6 @@ class InvPhyTrainerWarp:
         top_k_idx = np.argsort(distances)[:top_k]
         controller_radius = np.ones(first_frame_controller_points.shape[0]) * 0.01
         controller_radius[top_k_idx] = distances[top_k_idx] + 0.005
-        controller_radius[controller_radius > 0.05] = 0.05
 
         for i in range(len(first_frame_controller_points)):
             [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
@@ -582,6 +581,7 @@ class InvPhyTrainerWarp:
 
         cfg.dt = 5e-6
         cfg.num_substeps = round(1.0 / cfg.FPS / cfg.dt)
+        cfg.collision_dist = 0.005
 
         self.simulator = SpringMassSystemWarp(
             self.init_vertices,
