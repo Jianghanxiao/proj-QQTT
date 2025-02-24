@@ -6,7 +6,6 @@ import trimesh
 import open3d as o3d
 from utils.align_util import plot_image_with_points, select_point, as_mesh
 import pickle
-import matplotlib.pyplot as plt
 from match_pairs import image_pair_matching
 from scipy.spatial import KDTree
 from argparse import ArgumentParser
@@ -435,6 +434,10 @@ if __name__ == "__main__":
             final_pcd = o3d.geometry.PointCloud()
             final_pcd.points = o3d.utility.Vector3dVector(final_points)
             final_pcd.paint_uniform_color([0, 0, 1])
+    else:
+        index = np.where(final_points[:, 2] > 0)[0]
+        final_points[index, 2] = 0
+        
 
     if VIS:
         # Render the final stuffs as a turntable video

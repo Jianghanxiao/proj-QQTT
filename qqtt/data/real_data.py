@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 class RealData:
-    def __init__(self, visualize=False):
+    def __init__(self, visualize=False, save_gt=True):
         logger.info(f"[DATA]: loading data from {cfg.data_path}")
         self.data_path = cfg.data_path
         self.base_dir = cfg.base_dir
@@ -71,9 +71,9 @@ class RealData:
 
         self.frame_len = self.object_points.shape[0]
         # Visualize/save the GT frames
-        self.visualize_data(visualize=visualize)
+        self.visualize_data(visualize=visualize, save_gt=save_gt)
 
-    def visualize_data(self, visualize=False):
+    def visualize_data(self, visualize=False, save_gt=True):
         if visualize:
             visualize_pc(
                 self.object_points,
@@ -83,13 +83,14 @@ class RealData:
                 self.object_motions_valid,
                 visualize=True,
             )
-        visualize_pc(
-            self.object_points,
-            self.object_colors,
-            self.controller_points,
-            self.object_visibilities,
-            self.object_motions_valid,
-            visualize=False,
-            save_video=True,
-            save_path=f"{self.base_dir}/gt.mp4",
-        )
+        if save_gt:
+            visualize_pc(
+                self.object_points,
+                self.object_colors,
+                self.controller_points,
+                self.object_visibilities,
+                self.object_motions_valid,
+                visualize=False,
+                save_video=True,
+                save_path=f"{self.base_dir}/gt.mp4",
+            )

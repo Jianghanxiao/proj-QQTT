@@ -801,7 +801,7 @@ class SpringMassSystemWarp:
         else:
             self.tape = wp.Tape()
 
-    def set_controller_target(self, frame_idx):
+    def set_controller_target(self, frame_idx, pure_inference=False):
         if self.controller_points is not None:
             # Set the controller points
             wp.launch(
@@ -817,34 +817,35 @@ class SpringMassSystemWarp:
                 outputs=[self.wp_target_control_point],
             )
 
-        # Set the target points
-        wp.launch(
-            copy_vec3,
-            dim=self.num_original_points,
-            inputs=[self.gt_object_points[frame_idx]],
-            outputs=[self.wp_current_object_points],
-        )
-
-        if cfg.data_type == "real":
+        if not pure_inference:
+            # Set the target points
             wp.launch(
-                copy_int,
+                copy_vec3,
                 dim=self.num_original_points,
-                inputs=[self.gt_object_visibilities[frame_idx]],
-                outputs=[self.wp_current_object_visibilities],
-            )
-            wp.launch(
-                copy_int,
-                dim=self.num_original_points,
-                inputs=[self.gt_object_motions_valid[frame_idx - 1]],
-                outputs=[self.wp_current_object_motions_valid],
+                inputs=[self.gt_object_points[frame_idx]],
+                outputs=[self.wp_current_object_points],
             )
 
-            self.num_valid_visibilities = int(
-                self.gt_object_visibilities[frame_idx].sum()
-            )
-            self.num_valid_motions = int(
-                self.gt_object_motions_valid[frame_idx - 1].sum()
-            )
+            if cfg.data_type == "real":
+                wp.launch(
+                    copy_int,
+                    dim=self.num_original_points,
+                    inputs=[self.gt_object_visibilities[frame_idx]],
+                    outputs=[self.wp_current_object_visibilities],
+                )
+                wp.launch(
+                    copy_int,
+                    dim=self.num_original_points,
+                    inputs=[self.gt_object_motions_valid[frame_idx - 1]],
+                    outputs=[self.wp_current_object_motions_valid],
+                )
+
+                self.num_valid_visibilities = int(
+                    self.gt_object_visibilities[frame_idx].sum()
+                )
+                self.num_valid_motions = int(
+                    self.gt_object_motions_valid[frame_idx - 1].sum()
+                )
 
     def set_init_state(self, wp_x, wp_v):
         # Detach and clone and set requires_grad=True

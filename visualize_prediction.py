@@ -6,9 +6,10 @@ import torch
 import matplotlib.pyplot as plt
 from qqtt.utils import visualize_pc, cfg
 
-prediction_dir = (
-    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments_transfer"
-)
+# prediction_dir = (
+#     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments_transfer"
+# )
+prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/feng_test"
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
 
 dir_names = glob.glob(f"{prediction_dir}/*")
@@ -16,9 +17,12 @@ for dir_name in dir_names:
     case_name = dir_name.split("/")[-1]
     print(f"Processing {case_name}")
 
-    # Read the trajectory data
-    with open(f"{dir_name}/inference.pkl", "rb") as f:
-        vertices = pickle.load(f)
+    # # Read the trajectory data
+    # with open(f"{dir_name}/inference.pkl", "rb") as f:
+    #     vertices = pickle.load(f)
+    
+    # Read the npy file
+    vertices = np.load(f"{dir_name}/predicted.npy")
 
     # Read the controller points for visualization
     with open(f"{base_path}/{case_name}/final_data.pkl", "rb") as f:

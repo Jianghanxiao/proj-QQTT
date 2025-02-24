@@ -33,6 +33,7 @@ experiments_transfer/
 results/
 *.csv
 experiments*/
+gnn_test/
 
 
 # Byte-compiled / optimized / DLL files

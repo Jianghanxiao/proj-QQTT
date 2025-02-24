@@ -12,6 +12,22 @@ with open("out_domain.csv", "r") as f:
 for row in data:
     from_case, to_case = row
     print(f"Processing {from_case} to {to_case}")
+
     os.system(
         f"python data_process/outdomain_align.py --base_path {base_path} --from_case {from_case} --to_case {to_case} --exp_path {exp_path}"
+    )
+
+    os.system(
+        f"python outdomain_exp.py --base_path {base_path} --from_case {from_case} --to_case {to_case} --exp_path {exp_path}"
+    )
+
+    to_case, from_case = row
+    print(f"Processing {from_case} to {to_case}")
+
+    os.system(
+        f"python data_process/outdomain_align.py --base_path {base_path} --from_case {from_case} --to_case {to_case} --exp_path {exp_path}"
+    )
+
+    os.system(
+        f"python outdomain_exp.py --base_path {base_path} --from_case {from_case} --to_case {to_case} --exp_path {exp_path}"
     )
