@@ -34,6 +34,7 @@ results/
 *.csv
 experiments*/
 gnn_test/
+exp_results/
 
 
 # Byte-compiled / optimized / DLL files
