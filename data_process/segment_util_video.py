@@ -23,12 +23,17 @@ parser.add_argument("--base_path", type=str, default="/home/hanxiao/Desktop/Rese
 parser.add_argument("--case_name", type=str)
 parser.add_argument("--TEXT_PROMPT", type=str)
 parser.add_argument("--camera_idx", type=int)
+parser.add_argument("--output_path", type=str, default="NONE")
 args = parser.parse_args()
 
 base_path = args.base_path
 case_name = args.case_name
 TEXT_PROMPT = args.TEXT_PROMPT
 camera_idx = args.camera_idx
+if args.output_path == "NONE":
+    output_path = f"{base_path}/{case_name}"
+else:
+    output_path = args.output_path
 
 def existDir(dir_path):
     if not os.path.exists(dir_path):
@@ -188,19 +193,19 @@ for (
 Step 5: Visualize the segment results across the video and save them
 """
 
-existDir(f"{base_path}/{case_name}/mask/")
-existDir(f"{base_path}/{case_name}/mask/{camera_idx}")
+existDir(f"{output_path}/mask/")
+existDir(f"{output_path}/mask/{camera_idx}")
 
 ID_TO_OBJECTS = {i: obj for i, obj in enumerate(OBJECTS)}
 
 # Save the id_to_objects into json
-with open(f"{base_path}/{case_name}/mask/mask_info_{camera_idx}.json", "w") as f:
+with open(f"{output_path}/mask/mask_info_{camera_idx}.json", "w") as f:
     json.dump(ID_TO_OBJECTS, f)
 
 for frame_idx, masks in video_segments.items():
     for obj_id, mask in masks.items():
-        existDir(f"{base_path}/{case_name}/mask/{camera_idx}/{obj_id}")
+        existDir(f"{output_path}/mask/{camera_idx}/{obj_id}")
         # mask is 1 * H * W
         Image.fromarray((mask[0] * 255).astype(np.uint8)).save(
-            f"{base_path}/{case_name}/mask/{camera_idx}/{obj_id}/{frame_idx}.png"
+            f"{output_path}/mask/{camera_idx}/{obj_id}/{frame_idx}.png"
         )

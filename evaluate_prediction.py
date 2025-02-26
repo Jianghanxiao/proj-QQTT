@@ -6,14 +6,14 @@ import csv
 import numpy as np
 from pytorch3d.loss import chamfer_distance
 
+prediction_dir = (
+    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_exps/only_second"
+)
 # prediction_dir = (
 #     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments"
 # )
-prediction_dir = (
-    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments"
-)
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
-output_file = "results/final_results.csv"
+output_file = "results/final_results_only_second.csv"
 
 
 def evaluate_prediction(
