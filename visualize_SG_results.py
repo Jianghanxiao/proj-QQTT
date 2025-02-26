@@ -1,9 +1,10 @@
 import glob
 import json
 import cv2
+import os
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
-prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/indomain_our/output_dynamic_wrong/output_dynamic"
+prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/baselines/Spring-Gaus/exp"
 human_mask_path = (
     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types_human_mask"
 )
@@ -18,13 +19,15 @@ alpha = 0.7
 dir_names = glob.glob(f"{base_path}/*")
 for dir_name in dir_names:
     case_name = dir_name.split("/")[-1]
+    if not os.path.exists(f"{prediction_dir}/{case_name}/evaluations/0"):
+        continue
     print(f"Processing {case_name}!!!!!!!!!!!!!!!")
 
     with open(f"{base_path}/{case_name}/split.json", "r") as f:
         split = json.load(f)
     frame_len = split["frame_len"]
 
-    # Need to prepare the video
+     # Need to prepare the video
     for i in range(3):
         # Process each camera
         fourcc = cv2.VideoWriter_fourcc(*"avc1")  # Codec for .mp4 file format
@@ -36,7 +39,7 @@ for dir_name in dir_names:
         )
 
         for frame_idx in range(frame_len):
-            render_path = f"{prediction_dir}/{case_name}/{i}/{frame_idx:05d}.png"
+            render_path = f"{prediction_dir}/{case_name}/evaluations/{i}/images_pred/{i}_{frame_idx:02d}.png"
             origin_image_path = f"{base_path}/{case_name}/color/{i}/{frame_idx}.png"
             human_mask_image_path = (
                 f"{human_mask_path}/{case_name}/mask/{i}/0/{frame_idx}.png"
@@ -54,9 +57,8 @@ for dir_name in dir_names:
             object_mask = cv2.cvtColor(object_mask, cv2.COLOR_BGR2GRAY)
             object_mask = object_mask > 0
 
-            render_mask = render_img[:, :, 3] > 200
-            render_img[~render_mask, :3] = 255
-            render_img = render_img[:, :, :3]
+            render_mask = (render_img != 0).any(axis=2)
+            render_img[~render_mask] = 255
 
             final_image = origin_img.copy()
             final_image[render_mask] = render_img[render_mask]
