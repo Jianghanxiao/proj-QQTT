@@ -706,9 +706,9 @@ class InvPhyTrainerWarp:
     def on_press(self, key):
         try:
             if key.char == "w":
-                self.target_change = np.array([0.005, 0, 0])
-            elif key.char == "s":
                 self.target_change = np.array([-0.005, 0, 0])
+            elif key.char == "s":
+                self.target_change = np.array([0.005, 0, 0])
             elif key.char == "a":
                 self.target_change = np.array([0, 0.005, 0])
             elif key.char == "d":
@@ -840,7 +840,7 @@ class InvPhyTrainerWarp:
         # cfg.self_collision = True
 
         # Read the hand mask
-        hand_mask_path = f"{cfg.base}"
+        # hand_mask_path = f"{cfg.base}"
 
         while True:
             self.simulator.set_controller_interactive(prev_target, current_target)
