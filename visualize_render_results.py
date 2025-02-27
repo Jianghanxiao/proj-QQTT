@@ -3,7 +3,7 @@ import json
 import cv2
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
-prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/indomain_our/output_dynamic_wrong/output_dynamic"
+prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/indomain_our/output_dynamic/output_dynamic_fixed_relation"
 human_mask_path = (
     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types_human_mask"
 )
