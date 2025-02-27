@@ -10,6 +10,8 @@ from tqdm import tqdm
 import warp as wp
 from scipy.spatial import KDTree
 import pickle
+import cv2
+from pynput import keyboard
 
 
 class InvPhyTrainerWarp:
@@ -700,3 +702,189 @@ class InvPhyTrainerWarp:
                 save_video=True,
                 save_path=video_path,
             )
+
+    def on_press(self, key):
+        try:
+            if key.char == "w":
+                self.target_change = np.array([0.005, 0, 0])
+            elif key.char == "s":
+                self.target_change = np.array([-0.005, 0, 0])
+            elif key.char == "a":
+                self.target_change = np.array([0, 0.005, 0])
+            elif key.char == "d":
+                self.target_change = np.array([0, -0.005, 0])
+            elif key.char == "j":
+                self.target_change = np.array([0, 0, 0.005])
+            elif key.char == "k":
+                self.target_change = np.array([0, 0, -0.005])
+        except AttributeError:
+            pass
+
+    def on_release(self, key):
+        self.target_change = np.array([0.0, 0.0, 0.0])
+
+    def interactive_playground(self, model_path):
+        # Load the model
+        logger.info(f"Load model from {model_path}")
+        checkpoint = torch.load(model_path, map_location=cfg.device)
+
+        spring_Y = checkpoint["spring_Y"]
+        collide_elas = checkpoint["collide_elas"]
+        collide_fric = checkpoint["collide_fric"]
+        collide_object_elas = checkpoint["collide_object_elas"]
+        collide_object_fric = checkpoint["collide_object_fric"]
+        num_object_springs = checkpoint["num_object_springs"]
+
+        assert (
+            len(spring_Y) == self.simulator.n_springs
+        ), "Check if the loaded checkpoint match the config file to connect the springs"
+
+        self.simulator.set_spring_Y(torch.log(spring_Y).detach().clone())
+        self.simulator.set_collide(
+            collide_elas.detach().clone(), collide_fric.detach().clone()
+        )
+        self.simulator.set_collide_object(
+            collide_object_elas.detach().clone(),
+            collide_object_fric.detach().clone(),
+        )
+
+        logger.info("Party Time Start!!!!")
+        self.simulator.set_init_state(
+            self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
+        )
+
+        # video_path = f"{cfg.base_dir}/inference.mp4"
+        # save_path = f"{cfg.base_dir}/inference.pkl"
+        # self.visualize_sim(
+        #     save_only=True,
+        #     video_path=video_path,
+        #     save_trajectory=True,
+        #     save_path=save_path,
+        # )
+
+        vis_cam_idx = 0
+        FPS = cfg.FPS
+        width, height = cfg.WH
+        intrinsic = cfg.intrinsics[vis_cam_idx]
+        w2c = cfg.w2cs[vis_cam_idx]
+        vis = o3d.visualization.Visualizer()
+        vis.create_window(visible=False, width=width, height=height)
+
+        vis_vertices = (
+            wp.to_torch(self.simulator.wp_states[0].wp_x, requires_grad=False)
+            .cpu()
+            .numpy()
+        )
+
+        current_target = self.simulator.controller_points[0]
+        prev_target = current_target
+
+        vis_controller_points = current_target.cpu().numpy()
+
+        object_colors = self.object_colors.cpu().numpy()[0]
+        if object_colors.shape[0] < vis_vertices.shape[0]:
+            # If the object_colors is not the same as object_points, fill the colors with black
+            object_colors = np.concatenate(
+                [
+                    object_colors,
+                    np.ones(
+                        (
+                            vis_vertices.shape[0] - object_colors.shape[0],
+                            3,
+                        )
+                    )
+                    * 0.3,
+                ],
+                axis=0,
+            )
+
+        object_pcd = o3d.geometry.PointCloud()
+        object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
+        object_pcd.colors = o3d.utility.Vector3dVector(object_colors)
+        vis.add_geometry(object_pcd)
+
+        controller_meshes = []
+        prev_center = []
+        if vis_controller_points is not None:
+            # Use sphere mesh for each controller point
+            for j in range(vis_controller_points.shape[0]):
+                origin = vis_controller_points[j]
+                origin_color = [1, 0, 0]
+                controller_mesh = o3d.geometry.TriangleMesh.create_sphere(
+                    radius=0.01
+                ).translate(origin)
+                controller_mesh.compute_vertex_normals()
+                controller_mesh.paint_uniform_color(origin_color)
+                controller_meshes.append(controller_mesh)
+                vis.add_geometry(controller_meshes[-1])
+                prev_center.append(origin)
+
+        view_control = vis.get_view_control()
+        camera_params = o3d.camera.PinholeCameraParameters()
+        intrinsic_parameter = o3d.camera.PinholeCameraIntrinsic(
+            width, height, intrinsic
+        )
+        camera_params.intrinsic = intrinsic_parameter
+        camera_params.extrinsic = w2c
+        view_control.convert_from_pinhole_camera_parameters(
+            camera_params, allow_arbitrary=True
+        )
+
+        listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
+        listener.start()
+        self.target_change = np.zeros(3)
+
+        # import pdb
+        # pdb.set_trace()
+
+        # cfg.self_collision = True
+
+        # Read the hand mask
+        hand_mask_path = f"{cfg.base}"
+
+        while True:
+            self.simulator.set_controller_interactive(prev_target, current_target)
+            if self.simulator.object_collision_flag:
+                self.simulator.update_collision_graph()
+            wp.capture_launch(self.simulator.forward_graph)
+            x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
+            # Set the intial state for the next step
+            self.simulator.set_init_state(
+                self.simulator.wp_states[-1].wp_x,
+                self.simulator.wp_states[-1].wp_v,
+            )
+            # add the visualization code here
+            vis_vertices = x.cpu().numpy()
+
+            object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
+            vis.update_geometry(object_pcd)
+
+            if vis_controller_points is not None:
+                for j in range(vis_controller_points.shape[0]):
+                    origin = vis_controller_points[j]
+                    controller_meshes[j].translate(origin - prev_center[j])
+                    vis.update_geometry(controller_meshes[j])
+                    prev_center[j] = origin
+            vis.poll_events()
+            vis.update_renderer()
+
+            frame = np.asarray(vis.capture_screen_float_buffer(do_render=True))
+            frame = (frame * 255).astype(np.uint8)
+
+            # Get the mask where the pixel is white
+            mask = np.all(frame == [255, 255, 255], axis=-1)
+            image_path = f"{cfg.overlay_path}/{vis_cam_idx}/204.png"
+            overlay = cv2.imread(image_path)
+            overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+            frame[mask] = overlay[mask]
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            cv2.imshow("Interactive Playground", frame)
+            cv2.waitKey(1)
+
+            prev_target = current_target
+            current_target += torch.tensor(
+                self.target_change, dtype=torch.float32, device=cfg.device
+            )
+            vis_controller_points = current_target.cpu().numpy()
+        listener.stop()

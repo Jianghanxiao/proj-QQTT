@@ -648,7 +648,9 @@ class SpringMassSystemWarp:
             assert init_masks is None
             self.object_collision_flag = 1
             # Make all points as the collision points
-            init_masks = torch.arange(self.n_vertices, dtype=torch.int32, device=self.device)   
+            init_masks = torch.arange(
+                self.n_vertices, dtype=torch.int32, device=self.device
+            )
 
         if self.object_collision_flag:
             self.wp_masks = wp.from_torch(
@@ -656,7 +658,7 @@ class SpringMassSystemWarp:
                 dtype=wp.int32,
                 requires_grad=False,
             )
-            
+
             self.collision_grid = wp.HashGrid(128, 128, 128)
             self.collision_dist = collision_dist
 
@@ -846,6 +848,23 @@ class SpringMassSystemWarp:
                 self.num_valid_motions = int(
                     self.gt_object_motions_valid[frame_idx - 1].sum()
                 )
+
+    def set_controller_interactive(
+        self, last_controller_interactive, controller_interactive
+    ):
+        # Set the controller points
+        wp.launch(
+            copy_vec3,
+            dim=self.num_control_points,
+            inputs=[last_controller_interactive],
+            outputs=[self.wp_original_control_point],
+        )
+        wp.launch(
+            copy_vec3,
+            dim=self.num_control_points,
+            inputs=[controller_interactive],
+            outputs=[self.wp_target_control_point],
+        )
 
     def set_init_state(self, wp_x, wp_v):
         # Detach and clone and set requires_grad=True
