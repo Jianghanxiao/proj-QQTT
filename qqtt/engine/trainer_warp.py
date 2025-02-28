@@ -703,20 +703,20 @@ class InvPhyTrainerWarp:
                 save_path=video_path,
             )
 
-    def on_press(self, key):
+    def on_press(self, key, scale=1):
         try:
             if key.char == "w":
-                self.target_change = np.array([-0.005, 0, 0])
+                self.target_change = np.array([0.005, 0, 0]) * scale
             elif key.char == "s":
-                self.target_change = np.array([0.005, 0, 0])
+                self.target_change = np.array([-0.005, 0, 0]) * scale
             elif key.char == "a":
-                self.target_change = np.array([0, 0.005, 0])
+                self.target_change = np.array([0, -0.005, 0]) * scale
             elif key.char == "d":
-                self.target_change = np.array([0, -0.005, 0])
+                self.target_change = np.array([0, 0.005, 0]) * scale
             elif key.char == "j":
-                self.target_change = np.array([0, 0, 0.005])
+                self.target_change = np.array([0, 0, 0.005]) * scale
             elif key.char == "k":
-                self.target_change = np.array([0, 0, -0.005])
+                self.target_change = np.array([0, 0, -0.005]) * scale
         except AttributeError:
             pass
 
@@ -752,15 +752,6 @@ class InvPhyTrainerWarp:
         self.simulator.set_init_state(
             self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
         )
-
-        # video_path = f"{cfg.base_dir}/inference.mp4"
-        # save_path = f"{cfg.base_dir}/inference.pkl"
-        # self.visualize_sim(
-        #     save_only=True,
-        #     video_path=video_path,
-        #     save_trajectory=True,
-        #     save_path=save_path,
-        # )
 
         vis_cam_idx = 0
         FPS = cfg.FPS
@@ -833,14 +824,6 @@ class InvPhyTrainerWarp:
         listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
         listener.start()
         self.target_change = np.zeros(3)
-
-        # import pdb
-        # pdb.set_trace()
-
-        # cfg.self_collision = True
-
-        # Read the hand mask
-        # hand_mask_path = f"{cfg.base}"
 
         while True:
             self.simulator.set_controller_interactive(prev_target, current_target)
