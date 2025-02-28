@@ -1,5 +1,6 @@
 import glob
 import json
+import numpy as np
 import cv2
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
@@ -59,12 +60,21 @@ for dir_name in dir_names:
             render_img = render_img[:, :, :3]
 
             final_image = origin_img.copy()
+            final_image[:, :, :] = alpha * final_image + (1 - alpha) * np.array(
+                [255, 255, 255], dtype=np.uint8
+            )
             final_image[render_mask] = render_img[render_mask]
-            final_image[object_mask] = (1 - alpha) * render_img[
-                object_mask
-            ] + alpha * origin_img[object_mask]
-            final_image[human_mask] = origin_img[human_mask]
-
+            # final_image[human_mask] = (
+            #     alpha
+            #     * (
+            #         alpha * origin_img[human_mask]
+            #         + (1 - alpha) * np.array([255, 255, 255], dtype=np.uint8)
+            #     )
+            #     + (1 - alpha) * final_image[human_mask]
+            # )
+            final_image[human_mask] = alpha * origin_img[human_mask] + (
+                1 - alpha
+            ) * np.array([255, 255, 255], dtype=np.uint8)
             video_writer.write(final_image)
 
         video_writer.release()
