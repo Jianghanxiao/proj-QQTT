@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
-prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/indomain_our/output_dynamic/output_dynamic_fixed_relation"
+prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/indomain_our/output_dynamic"
 human_mask_path = (
     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types_human_mask"
 )
@@ -19,6 +19,8 @@ alpha = 0.7
 dir_names = glob.glob(f"{base_path}/*")
 for dir_name in dir_names:
     case_name = dir_name.split("/")[-1]
+    # if case_name != "single_clift_cloth_1":
+    #      continue
     print(f"Processing {case_name}!!!!!!!!!!!!!!!")
 
     with open(f"{base_path}/{case_name}/split.json", "r") as f:
@@ -55,26 +57,25 @@ for dir_name in dir_names:
             object_mask = cv2.cvtColor(object_mask, cv2.COLOR_BGR2GRAY)
             object_mask = object_mask > 0
 
-            render_mask = render_img[:, :, 3] > 200
-            render_img[~render_mask, :3] = 255
-            render_img = render_img[:, :, :3]
-
             final_image = origin_img.copy()
+            render_mask = np.logical_and(
+                (render_img != 0).any(axis=2), render_img[:, :, 3] > 100
+            )
+            render_img[~render_mask, 3] = 0
+
             final_image[:, :, :] = alpha * final_image + (1 - alpha) * np.array(
                 [255, 255, 255], dtype=np.uint8
             )
-            final_image[render_mask] = render_img[render_mask]
-            # final_image[human_mask] = (
-            #     alpha
-            #     * (
-            #         alpha * origin_img[human_mask]
-            #         + (1 - alpha) * np.array([255, 255, 255], dtype=np.uint8)
-            #     )
-            #     + (1 - alpha) * final_image[human_mask]
-            # )
+
+            test_alpha = render_img[:, :, 3] / 255
+            final_image[:, :, :] = render_img[:, :, :3] * test_alpha[
+                :, :, None
+            ] + final_image * (1 - test_alpha[:, :, None])
+
             final_image[human_mask] = alpha * origin_img[human_mask] + (
                 1 - alpha
             ) * np.array([255, 255, 255], dtype=np.uint8)
+
             video_writer.write(final_image)
 
         video_writer.release()
