@@ -866,25 +866,39 @@ class SpringMassSystemWarp:
             outputs=[self.wp_target_control_point],
         )
 
-    def set_init_state(self, wp_x, wp_v):
+    def set_init_state(self, wp_x, wp_v, pure_inference=False):
         # Detach and clone and set requires_grad=True
         assert (
             self.num_object_points == wp_x.shape[0]
             and self.num_object_points == self.wp_states[0].wp_x.shape[0]
         )
 
-        wp.launch(
-            copy_vec3,
-            dim=self.num_object_points,
-            inputs=[wp.clone(wp_x, requires_grad=False)],
-            outputs=[self.wp_states[0].wp_x],
-        )
-        wp.launch(
-            copy_vec3,
-            dim=self.num_object_points,
-            inputs=[wp.clone(wp_v, requires_grad=False)],
-            outputs=[self.wp_states[0].wp_v],
-        )
+        if not pure_inference:
+            wp.launch(
+                copy_vec3,
+                dim=self.num_object_points,
+                inputs=[wp.clone(wp_x, requires_grad=False)],
+                outputs=[self.wp_states[0].wp_x],
+            )
+            wp.launch(
+                copy_vec3,
+                dim=self.num_object_points,
+                inputs=[wp.clone(wp_v, requires_grad=False)],
+                outputs=[self.wp_states[0].wp_v],
+            )
+        else:
+            wp.launch(
+                copy_vec3,
+                dim=self.num_object_points,
+                inputs=[wp_x],
+                outputs=[self.wp_states[0].wp_x],
+            )
+            wp.launch(
+                copy_vec3,
+                dim=self.num_object_points,
+                inputs=[wp_v],
+                outputs=[self.wp_states[0].wp_v],
+            )
 
     def set_acc_count(self, acc_count):
         if acc_count:

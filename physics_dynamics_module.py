@@ -10,6 +10,9 @@ import os
 import pickle
 import json
 import open3d as o3d
+from time import time
+import torch.multiprocessing as mp
+import warp as wp
 
 
 def set_all_seeds(seed):
@@ -48,11 +51,14 @@ class PhysDynamicModule:
         init_colors,
         init_controller_xyz,
         init_controller_rot,
+        batch_size=10,
         device="cuda",
     ):
         # set the random seed, so that the results are reproducible
         seed = 42
         set_all_seeds(seed)
+
+        self.batch_size = batch_size
 
         if "cloth" in case_name or "package" in case_name:
             cfg.load_from_yaml("configs/cloth.yaml")
@@ -83,6 +89,14 @@ class PhysDynamicModule:
         cfg.WH = data["WH"]
 
         logger.set_log_file(path=base_dir, name="inference_log")
+        # self.trainers = []
+        # for i in range(self.batch_size):
+        #     trainer = InvPhyTrainerWarp(
+        #         data_path=f"{base_path}/{case_name}/final_data.pkl",
+        #         base_dir=base_dir,
+        #         pure_inference_mode=True,
+        #     )
+        #     self.trainers.append(trainer)
         self.trainer = InvPhyTrainerWarp(
             data_path=f"{base_path}/{case_name}/final_data.pkl",
             base_dir=base_dir,
@@ -118,8 +132,18 @@ class PhysDynamicModule:
         best_model_path = glob.glob(f"{experiments_path}/{case_name}/train/best_*.pth")[
             0
         ]
+        # for i in range(self.batch_size):
+        #     self.trainers[i].load_model_transfer(
+        #         best_model_path,
+        #         self.init_controller_points.clone(),
+        #         final_points.copy(),
+        #         dt=5e-5,
+        #     )
         self.trainer.load_model_transfer(
-            best_model_path, self.init_controller_points, final_points, dt=5e-5
+            best_model_path,
+            self.init_controller_points.clone(),
+            final_points.copy(),
+            dt=5e-5,
         )
 
     def align(self, to_pts, to_colors, from_pts, from_colors):
@@ -154,8 +178,9 @@ class PhysDynamicModule:
 
         return final_points
 
-    def rollout_serialize(self, eef_xyz, eef_rot, visualize=True):
+    def rollout_serialize(self, eef_xyz, eef_rot, visualize=False):
         batch_size = eef_xyz.shape[0]
+        assert batch_size == self.batch_size
         all_pts = []
         for i in range(batch_size):
             # Transform the controller points position based on the rotation and translation
@@ -172,6 +197,59 @@ class PhysDynamicModule:
             all_pts.append(pts)
         all_pts = torch.stack(all_pts, dim=0)
         return all_pts
+
+#     def rollout_parallel(self, eef_xyz, eef_rot, visualize=False):
+#         result_queue = mp.Queue()
+
+#         batch_size = eef_xyz.shape[0]
+#         assert batch_size == self.batch_size
+#         eef_xyz = torch.tensor(eef_xyz, dtype=torch.float, device=self.device)
+#         eef_rot = torch.tensor(eef_rot, dtype=torch.float, device=self.device)
+
+#         processes = []
+#         for i in range(batch_size):
+#             # 使用torch.multiprocessing.Process创建进程
+#             p = mp.Process(
+#                 target=rollout_worker,
+#                 args=(
+#                     i,
+#                     eef_xyz[i],
+#                     eef_rot[i],
+#                     self.controller_points_position,
+#                     result_queue,
+#                     self.trainers[i],
+#                 ),
+#             )
+#             processes.append(p)
+#             p.start()
+
+#         results = {}
+#         for p in processes:
+#             p.join()
+
+#         while not result_queue.empty():
+#             i, pts = result_queue.get()  # 获取每个子进程的结果
+#             results[i] = pts
+
+#         return results
+
+
+# def rollout_worker(
+#     i, eef_xyz, eef_rot, controller_points_position, trainer, result_queue
+# ):
+#     print(eef_rot.shape)
+#     print(controller_points_position.shape)
+#     controller_points_array = torch.einsum(
+#         "bij,nj->bni",
+#         eef_rot,  # shape: (batch_size, 3, 3)
+#         controller_points_position,  # shape: (8, 3)
+#     )
+#     controller_points_array = controller_points_array + eef_xyz[:, None, :]
+#     controller_points_array = torch.tensor(
+#         controller_points_array, dtype=torch.float, device="cuda"
+#     )
+#     pts = trainer.rollout(controller_points_array, visualize=False)
+#     result_queue.put((i, pts))
 
 
 if __name__ == "__main__":
@@ -205,6 +283,8 @@ if __name__ == "__main__":
         ]
     )
 
+    batch_size = 10
+
     dynamic_module = PhysDynamicModule(
         base_path="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types",
         case_name="single_lift_rope",
@@ -215,6 +295,7 @@ if __name__ == "__main__":
         init_colors=init_colors,
         init_controller_xyz=init_controller_xyz,
         init_controller_rot=init_controller_rot,
+        batch_size=batch_size,
         device="cuda",
     )
 
@@ -239,11 +320,14 @@ if __name__ == "__main__":
     controller_xyzs = np.array(controller_xyzs)
     controller_rots = np.array(controller_rots)
 
-    dynamic_module.rollout_serialize(
-        torch.tensor(
-            [controller_xyzs], dtype=torch.float32, device="cuda"
-        ),
-        torch.tensor(
-            [controller_rots], dtype=torch.float32, device="cuda"
-        ),
-    )
+    print("Finish initialization!!!!!!!!!!!!!!!!!!!!")
+    with wp.ScopedTimer("test"):
+        results = dynamic_module.rollout_serialize(
+            torch.tensor(
+                [controller_xyzs] * batch_size, dtype=torch.float32, device="cuda"
+            ),
+            torch.tensor(
+                [controller_rots] * batch_size, dtype=torch.float32, device="cuda"
+            ),
+            visualize=False,
+        )

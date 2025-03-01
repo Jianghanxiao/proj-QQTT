@@ -948,7 +948,9 @@ class InvPhyTrainerWarp:
             device=cfg.device,
         )
         self.controller_points = torch.tensor(
-            [controller_points, controller_points], dtype=torch.float32, device=cfg.device
+            [controller_points, controller_points],
+            dtype=torch.float32,
+            device=cfg.device,
         )
 
         cfg.dt = dt
@@ -1007,9 +1009,10 @@ class InvPhyTrainerWarp:
 
     def rollout(self, controller_points_array, visualize=False):
 
-        self.simulator.set_init_state(
-            self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
-        )
+        with wp.ScopedTimer("set_init_state"):
+            self.simulator.set_init_state(
+                self.simulator.wp_init_vertices, self.simulator.wp_init_velocities, pure_inference=True
+            )
         current_target = self.init_controller_points
         prev_target = current_target
 
@@ -1080,37 +1083,37 @@ class InvPhyTrainerWarp:
                 camera_params, allow_arbitrary=True
             )
 
-        action_num = controller_points_array.shape[0]
-        for i in range(action_num):
-            prev_target = current_target
-            current_target = controller_points_array[i].contiguous()
-            self.simulator.set_controller_interactive(prev_target, current_target)
-            if self.simulator.object_collision_flag:
-                self.simulator.update_collision_graph()
-            wp.capture_launch(self.simulator.forward_graph)
-            x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
-            self.simulator.set_init_state(
-                self.simulator.wp_states[-1].wp_x,
-                self.simulator.wp_states[-1].wp_v,
-            )
-            if visualize:
-                # add the visualization code here
-                vis_vertices = x.cpu().numpy()
+        with wp.ScopedTimer("rollout"):
+            action_num = controller_points_array.shape[0]
+            for i in range(action_num):
+                prev_target = current_target
+                current_target = controller_points_array[i].contiguous()
+                self.simulator.set_controller_interactive(prev_target, current_target)
+                if self.simulator.object_collision_flag:
+                    self.simulator.update_collision_graph()
+                with wp.ScopedTimer("set"):
+                    wp.capture_launch(self.simulator.forward_graph)
+                    x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
+                    self.simulator.set_init_state(
+                        self.simulator.wp_states[-1].wp_x,
+                        self.simulator.wp_states[-1].wp_v,
+                        pure_inference=True,
+                    )
+                if visualize:
+                    # add the visualization code here
+                    vis_vertices = x.cpu().numpy()
 
-                object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
-                vis.update_geometry(object_pcd)
+                    object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
+                    vis.update_geometry(object_pcd)
 
-                vis_controller_points = current_target.cpu().numpy()
-                if vis_controller_points is not None:
-                    for j in range(vis_controller_points.shape[0]):
-                        origin = vis_controller_points[j]
-                        controller_meshes[j].translate(origin - prev_center[j])
-                        vis.update_geometry(controller_meshes[j])
-                        prev_center[j] = origin
-                vis.poll_events()
-                vis.update_renderer()
-        
+                    vis_controller_points = current_target.cpu().numpy()
+                    if vis_controller_points is not None:
+                        for j in range(vis_controller_points.shape[0]):
+                            origin = vis_controller_points[j]
+                            controller_meshes[j].translate(origin - prev_center[j])
+                            vis.update_geometry(controller_meshes[j])
+                            prev_center[j] = origin
+                    vis.poll_events()
+                    vis.update_renderer()
+
         return x
-
-        
-
