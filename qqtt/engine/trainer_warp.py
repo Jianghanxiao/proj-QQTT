@@ -1,6 +1,9 @@
 from qqtt.data import RealData, SimpleData
 from qqtt.utils import logger, visualize_pc, cfg
-from qqtt.model.diff_simulator import SpringMassSystemWarp
+from qqtt.model.diff_simulator import (
+    SpringMassSystemWarp,
+    SpringMassSystemWarpAccelerate,
+)
 import open3d as o3d
 import numpy as np
 import torch
@@ -873,7 +876,7 @@ class InvPhyTrainerWarp:
         listener.stop()
 
     def load_model_transfer(
-        self, model_path, init_controller_points, final_points, dt=5e-5
+        self, model_path, init_controller_points, final_points, action_num, dt=5e-5
     ):
         # Load the model
         logger.info(f"Load model from {model_path}")
@@ -948,7 +951,7 @@ class InvPhyTrainerWarp:
             device=cfg.device,
         )
         self.controller_points = torch.tensor(
-            [controller_points, controller_points],
+            [controller_points] * action_num,
             dtype=torch.float32,
             device=cfg.device,
         )
@@ -957,7 +960,7 @@ class InvPhyTrainerWarp:
         cfg.num_substeps = round(1.0 / cfg.FPS / cfg.dt)
         cfg.collision_dist = 0.005
 
-        self.simulator = SpringMassSystemWarp(
+        self.simulator = SpringMassSystemWarpAccelerate(
             self.init_vertices,
             self.init_springs,
             self.init_rest_lengths,
@@ -1008,13 +1011,18 @@ class InvPhyTrainerWarp:
         )
 
     def rollout(self, controller_points_array, visualize=False):
+        self.simulator.reset_idx()
 
-        with wp.ScopedTimer("set_init_state"):
-            self.simulator.set_init_state(
-                self.simulator.wp_init_vertices, self.simulator.wp_init_velocities, pure_inference=True
-            )
-        current_target = self.init_controller_points
-        prev_target = current_target
+        self.simulator.set_init_state(
+            self.simulator.wp_init_vertices,
+            self.simulator.wp_init_velocities,
+            pure_inference=True,
+        )
+
+        self.simulator.controller_points = torch.cat(
+            [self.init_controller_points.unsqueeze(0), controller_points_array], dim=0
+        )
+        self.simulator.set_controller_targets()
 
         if visualize:
             vis = o3d.visualization.Visualizer()
@@ -1029,7 +1037,7 @@ class InvPhyTrainerWarp:
                 .numpy()
             )
 
-            vis_controller_points = current_target.cpu().numpy()
+            # vis_controller_points = current_target.cpu().numpy()
 
             object_colors = self.object_colors.cpu().numpy()[0]
             if object_colors.shape[0] < vis_vertices.shape[0]:
@@ -1053,21 +1061,21 @@ class InvPhyTrainerWarp:
             object_pcd.colors = o3d.utility.Vector3dVector(object_colors)
             vis.add_geometry(object_pcd)
 
-            controller_meshes = []
-            prev_center = []
-            if vis_controller_points is not None:
-                # Use sphere mesh for each controller point
-                for j in range(vis_controller_points.shape[0]):
-                    origin = vis_controller_points[j]
-                    origin_color = [1, 0, 0]
-                    controller_mesh = o3d.geometry.TriangleMesh.create_sphere(
-                        radius=0.01
-                    ).translate(origin)
-                    controller_mesh.compute_vertex_normals()
-                    controller_mesh.paint_uniform_color(origin_color)
-                    controller_meshes.append(controller_mesh)
-                    vis.add_geometry(controller_meshes[-1])
-                    prev_center.append(origin)
+            # controller_meshes = []
+            # prev_center = []
+            # if vis_controller_points is not None:
+            #     # Use sphere mesh for each controller point
+            #     for j in range(vis_controller_points.shape[0]):
+            #         origin = vis_controller_points[j]
+            #         origin_color = [1, 0, 0]
+            #         controller_mesh = o3d.geometry.TriangleMesh.create_sphere(
+            #             radius=0.01
+            #         ).translate(origin)
+            #         controller_mesh.compute_vertex_normals()
+            #         controller_mesh.paint_uniform_color(origin_color)
+            #         controller_meshes.append(controller_mesh)
+            #         vis.add_geometry(controller_meshes[-1])
+            #         prev_center.append(origin)
 
             view_control = vis.get_view_control()
             camera_params = o3d.camera.PinholeCameraParameters()
@@ -1083,37 +1091,30 @@ class InvPhyTrainerWarp:
                 camera_params, allow_arbitrary=True
             )
 
-        with wp.ScopedTimer("rollout"):
-            action_num = controller_points_array.shape[0]
-            for i in range(action_num):
-                prev_target = current_target
-                current_target = controller_points_array[i].contiguous()
-                self.simulator.set_controller_interactive(prev_target, current_target)
-                if self.simulator.object_collision_flag:
-                    self.simulator.update_collision_graph()
-                with wp.ScopedTimer("set"):
-                    wp.capture_launch(self.simulator.forward_graph)
-                    x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
-                    self.simulator.set_init_state(
-                        self.simulator.wp_states[-1].wp_x,
-                        self.simulator.wp_states[-1].wp_v,
-                        pure_inference=True,
-                    )
-                if visualize:
-                    # add the visualization code here
-                    vis_vertices = x.cpu().numpy()
+        action_num = controller_points_array.shape[0]
+        for i in range(action_num):
 
-                    object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
-                    vis.update_geometry(object_pcd)
+            if self.simulator.object_collision_flag:
+                self.simulator.update_collision_graph()
+            wp.capture_launch(self.simulator.forward_graph)
 
-                    vis_controller_points = current_target.cpu().numpy()
-                    if vis_controller_points is not None:
-                        for j in range(vis_controller_points.shape[0]):
-                            origin = vis_controller_points[j]
-                            controller_meshes[j].translate(origin - prev_center[j])
-                            vis.update_geometry(controller_meshes[j])
-                            prev_center[j] = origin
-                    vis.poll_events()
-                    vis.update_renderer()
+            # x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
+            if visualize:
+                # add the visualization code here
+                vis_vertices = x.cpu().numpy()
 
+                object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
+                vis.update_geometry(object_pcd)
+
+                # vis_controller_points = current_target.cpu().numpy()
+                # if vis_controller_points is not None:
+                #     for j in range(vis_controller_points.shape[0]):
+                #         origin = vis_controller_points[j]
+                #         controller_meshes[j].translate(origin - prev_center[j])
+                #         vis.update_geometry(controller_meshes[j])
+                #         prev_center[j] = origin
+                vis.poll_events()
+                vis.update_renderer()
+
+        x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
         return x

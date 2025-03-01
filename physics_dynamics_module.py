@@ -10,7 +10,7 @@ import os
 import pickle
 import json
 import open3d as o3d
-from time import time
+import time
 import torch.multiprocessing as mp
 import warp as wp
 
@@ -51,7 +51,8 @@ class PhysDynamicModule:
         init_colors,
         init_controller_xyz,
         init_controller_rot,
-        batch_size=10,
+        action_num,
+        batch_size,
         device="cuda",
     ):
         # set the random seed, so that the results are reproducible
@@ -143,6 +144,7 @@ class PhysDynamicModule:
             best_model_path,
             self.init_controller_points.clone(),
             final_points.copy(),
+            action_num=action_num,
             dt=5e-5,
         )
 
@@ -183,19 +185,20 @@ class PhysDynamicModule:
         assert batch_size == self.batch_size
         all_pts = []
         for i in range(batch_size):
-            # Transform the controller points position based on the rotation and translation
-            controller_points_array = torch.einsum(
-                "bij,nj->bni",
-                eef_rot[i],  # shape: (batch_size, 3, 3)
-                self.controller_points_position,  # shape: (8, 3)
-            )
-            controller_points_array = controller_points_array + eef_xyz[i][:, None, :]
-            controller_points_array = torch.tensor(
-                controller_points_array, dtype=torch.float, device=self.device
-            )
-            pts = self.trainer.rollout(controller_points_array, visualize=visualize)
-            all_pts.append(pts)
-        all_pts = torch.stack(all_pts, dim=0)
+            with wp.ScopedTimer("rollout"):
+                # Transform the controller points position based on the rotation and translation
+                controller_points_array = torch.einsum(
+                    "bij,nj->bni",
+                    eef_rot[i],  # shape: (batch_size, 3, 3)
+                    self.controller_points_position,  # shape: (8, 3)
+                )
+                controller_points_array = controller_points_array + eef_xyz[i][:, None, :]
+                controller_points_array = torch.tensor(
+                    controller_points_array, dtype=torch.float, device=self.device
+                ).contiguous()
+                pts = self.trainer.rollout(controller_points_array, visualize=visualize)
+                all_pts.append(pts)
+        # all_pts = torch.stack(all_pts, dim=0)
         return all_pts
 
 #     def rollout_parallel(self, eef_xyz, eef_rot, visualize=False):
@@ -283,7 +286,8 @@ if __name__ == "__main__":
         ]
     )
 
-    batch_size = 10
+    batch_size = 5
+    action_num = 143
 
     dynamic_module = PhysDynamicModule(
         base_path="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types",
@@ -295,6 +299,7 @@ if __name__ == "__main__":
         init_colors=init_colors,
         init_controller_xyz=init_controller_xyz,
         init_controller_rot=init_controller_rot,
+        action_num=action_num,
         batch_size=batch_size,
         device="cuda",
     )
@@ -321,13 +326,12 @@ if __name__ == "__main__":
     controller_rots = np.array(controller_rots)
 
     print("Finish initialization!!!!!!!!!!!!!!!!!!!!")
-    with wp.ScopedTimer("test"):
-        results = dynamic_module.rollout_serialize(
-            torch.tensor(
-                [controller_xyzs] * batch_size, dtype=torch.float32, device="cuda"
-            ),
-            torch.tensor(
-                [controller_rots] * batch_size, dtype=torch.float32, device="cuda"
-            ),
-            visualize=False,
-        )
+    results = dynamic_module.rollout_serialize(
+        torch.tensor(
+            [controller_xyzs] * batch_size, dtype=torch.float32, device="cuda"
+        ),
+        torch.tensor(
+            [controller_rots] * batch_size, dtype=torch.float32, device="cuda"
+        ),
+        visualize=False,
+    )
