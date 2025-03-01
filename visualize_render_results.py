@@ -19,8 +19,6 @@ alpha = 0.7
 dir_names = glob.glob(f"{base_path}/*")
 for dir_name in dir_names:
     case_name = dir_name.split("/")[-1]
-    # if case_name != "single_clift_cloth_1":
-    #      continue
     print(f"Processing {case_name}!!!!!!!!!!!!!!!")
 
     with open(f"{base_path}/{case_name}/split.json", "r") as f:

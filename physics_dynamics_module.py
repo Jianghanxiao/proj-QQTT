@@ -1,0 +1,215 @@
+from qqtt import InvPhyTrainerWarp
+from qqtt.utils import logger, cfg
+from datetime import datetime
+import random
+import numpy as np
+import torch
+from argparse import ArgumentParser
+import glob
+import os
+import pickle
+import json
+import open3d as o3d
+
+
+def set_all_seeds(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+controller_points_position = np.array(
+    [
+        [0.01, 0.01, 0.01],
+        [-0.01, 0.01, 0.01],
+        [0.01, -0.01, 0.01],
+        [-0.01, -0.01, 0.01],
+        [0.01, 0.01, -0.01],
+        [-0.01, 0.01, -0.01],
+        [0.01, -0.01, -0.01],
+        [-0.01, -0.01, -0.01],
+    ]
+)
+
+
+class PhysDynamicModule:
+    def __init__(
+        self,
+        base_path,
+        case_name,
+        experiments_path,
+        experiments_optimization_path,
+        output_dir,
+        init_pts,
+        init_colors,
+        init_controller_xyz,
+        init_controller_rot,
+        device="cuda",
+    ):
+        # set the random seed, so that the results are reproducible
+        seed = 42
+        set_all_seeds(seed)
+
+        if "cloth" in case_name or "package" in case_name:
+            cfg.load_from_yaml("configs/cloth.yaml")
+        else:
+            cfg.load_from_yaml("configs/real.yaml")
+
+        base_dir = f"{output_dir}/{case_name}"
+
+        # Read the first-satage optimized parameters to set the indifferentiable parameters
+        optimal_path = f"{experiments_optimization_path}/{case_name}/optimal_params.pkl"
+        logger.info(f"Load optimal parameters from: {optimal_path}")
+        assert os.path.exists(
+            optimal_path
+        ), f"{case_name}: Optimal parameters not found: {optimal_path}"
+        with open(optimal_path, "rb") as f:
+            optimal_params = pickle.load(f)
+        cfg.set_optimal_params(optimal_params)
+
+        logger.set_log_file(path=base_dir, name="inference_log")
+        self.trainer = InvPhyTrainerWarp(
+            data_path=f"{base_path}/{case_name}/final_data.pkl",
+            base_dir=base_dir,
+            pure_inference_mode=True,
+        )
+
+        self.device = device
+
+        init_controller_xyz = torch.tensor(
+            init_controller_xyz, dtype=torch.float, device=self.device
+        )
+        init_controller_rot = torch.tensor(
+            init_controller_rot, dtype=torch.float32, device=self.device
+        )
+
+        self.controller_points_position = torch.tensor(
+            controller_points_position, dtype=torch.float, device=self.device
+        )
+
+        self.init_controller_points = (
+            torch.matmul(init_controller_rot, self.controller_points_position.T).T
+            + init_controller_xyz
+        )
+
+        # Do the alignment between the digital twin and the observations
+        final_points = self.align(
+            init_pts,
+            init_colors,
+            self.trainer.dataset.structure_points
+            .cpu()
+            .numpy(),
+            self.trainer.dataset.original_object_colors[0].cpu().numpy(),
+        )
+
+        best_model_path = glob.glob(f"{experiments_path}/{case_name}/train/best_*.pth")[
+            0
+        ]
+        self.trainer.load_model_transfer(
+            best_model_path, self.init_controller_points, final_points, dt=5e-5
+        )
+
+    def align(self, to_pts, to_colors, from_pts, from_colors):
+        # Do the colored ICP registration
+        source = o3d.geometry.PointCloud()
+        source.points = o3d.utility.Vector3dVector(from_pts)
+        source.colors = o3d.utility.Vector3dVector(from_colors)
+        target = o3d.geometry.PointCloud()
+        target.points = o3d.utility.Vector3dVector(to_pts)
+        target.colors = o3d.utility.Vector3dVector(to_colors)
+        target = target.voxel_down_sample(voxel_size=0.005)
+        # o3d.visualization.draw_geometries([source, target])
+
+        # Move the source to the target
+        source.translate(
+            np.mean(target.points, axis=0) - np.mean(source.points, axis=0)
+        )
+
+        threshold = 0.02
+        trans_init = np.identity(4)
+        reg_p2p = o3d.pipelines.registration.registration_icp(
+            source,
+            target,
+            threshold,
+            trans_init,
+            o3d.pipelines.registration.TransformationEstimationPointToPoint(),
+        )
+
+        final_points = np.array(source.transform(reg_p2p.transformation).points)
+
+        # o3d.visualization.draw_geometries([source, target])
+
+        return final_points
+
+    def rollout_serialize(self, eef_xyz, eef_rot, visualize=True):
+        batch_size = eef_xyz.shape[0]
+        all_pts = []
+        for i in range(batch_size):
+            # Transform the controller points position based on the rotation and translation
+            controller_points_array = torch.einsum(
+                "bij,nj->bni",
+                eef_rot[i],  # shape: (batch_size, 3, 3)
+                self.controller_points_position,  # shape: (8, 3)
+            )
+            controller_points_array = controller_points_array + eef_xyz[i].unsqueeze(0)
+            controller_points_array = torch.tensor(
+                controller_points_array, dtype=torch.float, device=self.device
+            )
+            pts = self.trainer.rollout(controller_points_array, visualize=visualize)
+            all_pts.append(pts)
+        all_pts = torch.stack(all_pts, dim=0)
+        return all_pts
+
+
+if __name__ == "__main__":
+    init_pcd_path = (
+        "/home/hanxiao/Downloads/episode_0000 (1)/episode_0000/pcd_clean_new/000000.npz"
+    )
+    init_pcd = np.load(init_pcd_path)
+    init_pts = init_pcd["pts"]
+    init_colors = init_pcd["colors"]
+
+    init_controller_xyz = np.array(
+        [3.044547887605847380e-01, 2.841108186878805730e-01, -1.315379715678757083e-02]
+    )
+    init_controller_rot = np.array(
+        [
+            [
+                -6.480154314145059047e-02,
+                9.962636060017686646e-01,
+                -5.709279606780431893e-02,
+            ],
+            [
+                -9.961174236442396079e-01,
+                -6.799639288895997780e-02,
+                -5.591573004489115012e-02,
+            ],
+            [
+                -5.958891103930036293e-02,
+                5.324770333491749691e-02,
+                9.968018076682580997e-01,
+            ],
+        ]
+    )
+
+    dynamic_module = PhysDynamicModule(
+        base_path="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types",
+        case_name="single_lift_rope",
+        experiments_path="experiments",
+        experiments_optimization_path="experiments_optimization",
+        output_dir="temp_experiments",
+        init_pts=init_pts,
+        init_colors=init_colors,
+        init_controller_xyz=init_controller_xyz,
+        init_controller_rot=init_controller_rot,
+        device="cuda",
+    )
+
+    dynamic_module.rollout_serialize(
+        torch.tensor(np.array([[init_controller_xyz]]), dtype=torch.float, device="cuda"),
+        torch.tensor(np.array([[init_controller_rot]]), dtype=torch.float, device="cuda"),
+    )
