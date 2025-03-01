@@ -71,6 +71,17 @@ class PhysDynamicModule:
             optimal_params = pickle.load(f)
         cfg.set_optimal_params(optimal_params)
 
+        # Set the intrinsic and extrinsic parameters for visualization
+        with open(f"{base_path}/{case_name}/calibrate.pkl", "rb") as f:
+            c2ws = pickle.load(f)
+        w2cs = [np.linalg.inv(c2w) for c2w in c2ws]
+        cfg.c2ws = np.array(c2ws)
+        cfg.w2cs = np.array(w2cs)
+        with open(f"{base_path}/{case_name}/metadata.json", "r") as f:
+            data = json.load(f)
+        cfg.intrinsics = np.array(data["intrinsics"])
+        cfg.WH = data["WH"]
+
         logger.set_log_file(path=base_dir, name="inference_log")
         self.trainer = InvPhyTrainerWarp(
             data_path=f"{base_path}/{case_name}/final_data.pkl",
@@ -100,9 +111,7 @@ class PhysDynamicModule:
         final_points = self.align(
             init_pts,
             init_colors,
-            self.trainer.dataset.structure_points
-            .cpu()
-            .numpy(),
+            self.trainer.dataset.structure_points.cpu().numpy(),
             self.trainer.dataset.original_object_colors[0].cpu().numpy(),
         )
 
@@ -155,7 +164,7 @@ class PhysDynamicModule:
                 eef_rot[i],  # shape: (batch_size, 3, 3)
                 self.controller_points_position,  # shape: (8, 3)
             )
-            controller_points_array = controller_points_array + eef_xyz[i].unsqueeze(0)
+            controller_points_array = controller_points_array + eef_xyz[i][:, None, :]
             controller_points_array = torch.tensor(
                 controller_points_array, dtype=torch.float, device=self.device
             )
@@ -209,7 +218,32 @@ if __name__ == "__main__":
         device="cuda",
     )
 
+    controller_xyzs = []
+    controller_rots = []
+    for i in range(142):
+        path = f"/home/hanxiao/Downloads/episode_0000 (1)/episode_0000/robot/{(i+1):06d}.txt"
+        with open(path, "r") as f:
+            lines = f.readlines()
+            controller_xyz = np.array(
+                [float(x) for x in lines[0].strip().split(" ")], dtype=np.float32
+            )
+            controller_rot = np.array(
+                [float(x) for x in lines[1].strip().split(" ")]
+                + [float(x) for x in lines[2].strip().split(" ")]
+                + [float(x) for x in lines[3].strip().split(" ")],
+                dtype=np.float32,
+            ).reshape(3, 3)
+            controller_xyzs.append(controller_xyz)
+            controller_rots.append(controller_rot)
+
+    controller_xyzs = np.array(controller_xyzs)
+    controller_rots = np.array(controller_rots)
+
     dynamic_module.rollout_serialize(
-        torch.tensor(np.array([[init_controller_xyz]]), dtype=torch.float, device="cuda"),
-        torch.tensor(np.array([[init_controller_rot]]), dtype=torch.float, device="cuda"),
+        torch.tensor(
+            [controller_xyzs], dtype=torch.float32, device="cuda"
+        ),
+        torch.tensor(
+            [controller_rots], dtype=torch.float32, device="cuda"
+        ),
     )

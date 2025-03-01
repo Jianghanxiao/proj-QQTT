@@ -1017,6 +1017,9 @@ class InvPhyTrainerWarp:
             vis = o3d.visualization.Visualizer()
             vis.create_window(visible=True)
 
+            coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+            vis.add_geometry(coordinate)
+
             vis_vertices = (
                 wp.to_torch(self.simulator.wp_states[0].wp_x, requires_grad=False)
                 .cpu()
@@ -1063,6 +1066,20 @@ class InvPhyTrainerWarp:
                     vis.add_geometry(controller_meshes[-1])
                     prev_center.append(origin)
 
+            view_control = vis.get_view_control()
+            camera_params = o3d.camera.PinholeCameraParameters()
+            width, height = cfg.WH
+            intrinsic = cfg.intrinsics[0]
+            w2c = cfg.w2cs[0]
+            intrinsic_parameter = o3d.camera.PinholeCameraIntrinsic(
+                width, height, intrinsic
+            )
+            camera_params.intrinsic = intrinsic_parameter
+            camera_params.extrinsic = w2c
+            view_control.convert_from_pinhole_camera_parameters(
+                camera_params, allow_arbitrary=True
+            )
+
         action_num = controller_points_array.shape[0]
         for i in range(action_num):
             prev_target = current_target
@@ -1083,6 +1100,7 @@ class InvPhyTrainerWarp:
                 object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
                 vis.update_geometry(object_pcd)
 
+                vis_controller_points = current_target.cpu().numpy()
                 if vis_controller_points is not None:
                     for j in range(vis_controller_points.shape[0]):
                         origin = vis_controller_points[j]
