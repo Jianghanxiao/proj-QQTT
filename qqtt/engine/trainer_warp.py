@@ -19,7 +19,7 @@ from pynput import keyboard
 # TODO: 3dgs library
 from gaussian_splatting.scene.gaussian_model import GaussianModel
 from gaussian_splatting.scene.cameras import Camera
-from gaussian_splatting.gaussian_renderer import render
+from gaussian_splatting.gaussian_renderer import render as render_gaussian
 from gaussian_splatting.dynamic_utils import interpolate_motions_feng, interpolate_motions_feng_speedup, knn_weights, knn_weights_sparse, get_topk_indices, calc_weights_vals_from_indices
 from gaussian_splatting.utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
 from gaussian_splatting.render import remove_gaussians_with_low_opacity
@@ -598,7 +598,7 @@ class InvPhyTrainerWarp:
         cfg.num_substeps = round(1.0 / cfg.FPS / cfg.dt)
         cfg.collision_dist = 0.005
 
-        self.simulator = SpringMassSystemWarp(
+        self.simulator = SpringMassSystemWarp(    # TODO: this one
             self.init_vertices,
             self.init_springs,
             self.init_rest_lengths,
@@ -739,13 +739,13 @@ class InvPhyTrainerWarp:
                 target_change[idx] += change
         return target_change
     
-    def init_control_visualizer(self):
+    def init_control_ui(self):
 
         height = cfg.WH[1]
         width = cfg.WH[0]
 
-        self.arrow_fill = cv2.imread("./assets/arrow_fill.png", cv2.IMREAD_UNCHANGED)
-        self.arrow_empty = cv2.imread("./assets/arrow_empty.png", cv2.IMREAD_UNCHANGED)
+        self.arrow_fill = cv2.imread("./assets/arrow_fill.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
+        self.arrow_empty = cv2.imread("./assets/arrow_empty.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
         
         self.arrow_size = 50
         self.arrow_fill = cv2.resize(self.arrow_fill, (self.arrow_size, self.arrow_size))
@@ -795,6 +795,12 @@ class InvPhyTrainerWarp:
             "o": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 180, 1), # Down
         }
 
+        self.hand_left = cv2.imread("./assets/Picture2.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
+        self.hand_right = cv2.imread("./assets/Picture1.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
+
+        self.hand_left_pos = torch.tensor([0.0, 0.0, 0.0], device=cfg.device)
+        self.hand_right_pos = torch.tensor([0.0, 0.0, 0.0], device=cfg.device)
+
     def _rotate_arrow(self, arrow, key):
         rotation_matrix = self.rotations[key]
         rotated = cv2.warpAffine(
@@ -831,10 +837,95 @@ class InvPhyTrainerWarp:
         
         background[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w] = roi
         
-        return background
+        return background  
+    
+    def _overlay_hand_at_position(self, frame, target_points, x_axis, hand_size, hand_icon, align='center'):
+        result = frame.copy()
+        
+        mean_pos = target_points.cpu().numpy().mean(axis=0)
+
+        pixel_mean = self.projection @ np.append(mean_pos, 1)
+        pixel_mean = pixel_mean[:2] / pixel_mean[2]
+
+        pos_1 = np.append(mean_pos + hand_size * x_axis, 1)
+        pixel_1 = self.projection @ pos_1
+        pixel_1 = pixel_1[:2] / pixel_1[2]
+        
+        pos_2 = np.append(mean_pos - hand_size * x_axis, 1)
+        pixel_2 = self.projection @ pos_2
+        pixel_2 = pixel_2[:2] / pixel_2[2]
+        
+        icon_size = int(np.linalg.norm(pixel_1[:2] - pixel_2[:2]) / 2)
+        icon_size = max(1, min(icon_size, 100))
+
+        resized_icon = cv2.resize(hand_icon, (icon_size, icon_size))
+        h, w = resized_icon.shape[:2]
+        x, y = int(pixel_mean[0]), int(pixel_mean[1])
+        
+        if align == 'top-left':
+            roi_x = int(max(0, x - w * 0.15))
+            roi_y = int(max(0, y - h * 0.1))
+        if align == 'top-right':
+            roi_x = int(max(0, x - w + w * 0.15))
+            roi_y = int(max(0, y - h * 0.1))
+        if align == 'center':
+            roi_x = int(max(0, x - w // 2))
+            roi_y = int(max(0, y - h // 2))
+        roi_w = min(w, result.shape[1] - roi_x)
+        roi_h = min(h, result.shape[0] - roi_y)
+        
+        if roi_w <= 0 or roi_h <= 0:
+            return result
+        
+        icon_x = max(0, w // 2 - x)
+        icon_y = max(0, h // 2 - y)
+        
+        roi = result[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
+        icon_roi = resized_icon[icon_y:icon_y+roi_h, icon_x:icon_x+roi_w]
+        
+        if icon_roi.size == 0 or roi.shape[:2] != icon_roi.shape[:2]:
+            return result
+        
+        if icon_roi.shape[2] == 4:
+            alpha = icon_roi[:, :, 3] / 255.0
+            for c in range(3):
+                roi[:, :, c] = roi[:, :, c] * (1 - alpha) + icon_roi[:, :, c] * alpha
+            result[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w] = roi
+        else:
+            result[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w] = icon_roi[:, :, :3]
+
+        return result
+
+    def _overlay_hand_icons(self, frame):
+        if self.n_ctrl_parts not in [1, 2]:
+            raise ValueError("Only support 1 or 2 control parts")
+        
+        result = frame.copy()
+
+        c2w = np.linalg.inv(self.w2c)
+        x_axis = c2w[:3, 0]
+        self.projection = self.intrinsic @ self.w2c[:3, :]
+        hand_size = 0.1  # size in physical space (in meters)
+
+        if self.n_ctrl_parts == 1:
+            current_target = self.hand_left_pos.unsqueeze(0)
+            # align = 'top-right'
+            align = 'center'
+            result = self._overlay_hand_at_position(result, current_target, x_axis, hand_size, self.hand_left, align)
+        else:
+            for i in range(2):
+                current_target = self.hand_left_pos.unsqueeze(0) if i == 0 else self.hand_right_pos.unsqueeze(0)
+                # align = 'top-right' if i == 0 else 'top-left'
+                align = 'center'
+                hand_icon = self.hand_left if i == 0 else self.hand_right
+                result = self._overlay_hand_at_position(result, current_target, x_axis, hand_size, hand_icon, align)
+                
+        return result
     
     def update_frame(self, frame, pressed_keys):
         result = frame.copy()
+
+        result = self._overlay_hand_icons(result)
         
         # Draw all buttons for Set 1 (left side)
         for key, pos in self.arrow_positions_set1.items():
@@ -844,11 +935,12 @@ class InvPhyTrainerWarp:
                 result = self._overlay_arrow(result, self.arrow_empty, pos, key)
         
         # Draw all buttons for Set 2 (right side)
-        for key, pos in self.arrow_positions_set2.items():
-            if key in pressed_keys:
-                result = self._overlay_arrow(result, self.arrow_fill, pos, key)
-            else:
-                result = self._overlay_arrow(result, self.arrow_empty, pos, key)
+        if self.n_ctrl_parts == 2:
+            for key, pos in self.arrow_positions_set2.items():
+                if key in pressed_keys:
+                    result = self._overlay_arrow(result, self.arrow_fill, pos, key)
+                else:
+                    result = self._overlay_arrow(result, self.arrow_empty, pos, key)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.7
@@ -862,8 +954,15 @@ class InvPhyTrainerWarp:
         cv2.putText(result, "Control 2", (control2_x, text_y), font, font_scale, (255, 255, 255), thickness)
         
         return result
+    
+    def _find_closest_point(self, target_points):
+        """Find the closest structure point to any of the target points."""
+        dist_matrix = torch.sum((target_points.unsqueeze(1) - self.structure_points.unsqueeze(0)) ** 2, dim=2)
+        min_dist_per_ctrl_pts, min_indices = torch.min(dist_matrix, dim=1)
+        min_idx = min_indices[torch.argmin(min_dist_per_ctrl_pts)]
+        return self.structure_points[min_idx].unsqueeze(0)
 
-    def interactive_playground(self, model_path, gs_path, n_ctrl_parts=1):
+    def interactive_playground(self, model_path, gs_path, n_ctrl_parts=1, inv_ctrl=False):
         # Load the model
         logger.info(f"Load model from {model_path}")
         checkpoint = torch.load(model_path, map_location=cfg.device)
@@ -952,33 +1051,60 @@ class InvPhyTrainerWarp:
             for i in range(n_ctrl_parts):
                 mask = (cluster_labels == i)
                 masks_ctrl_pts.append(torch.from_numpy(mask))
+            # project the center of the cluster to the object to the image space, those on the left will be mask 1
+            center1 = np.mean(vis_controller_points[masks_ctrl_pts[0]], axis=0)
+            center2 = np.mean(vis_controller_points[masks_ctrl_pts[1]], axis=0)
+            center1 = np.concatenate([center1, [1]])
+            center2 = np.concatenate([center2, [1]])
+            proj_mat = intrinsic @ w2c[:3, :]
+            center1 = proj_mat @ center1
+            center2 = proj_mat @ center2
+            center1 = center1 / center1[-1]
+            center2 = center2 / center2[-1]
+            if center1[0] > center2[0]:
+                print("Switching the control parts")
+                masks_ctrl_pts = [masks_ctrl_pts[1], masks_ctrl_pts[0]]
         else:
             masks_ctrl_pts = None
         self.n_ctrl_parts = n_ctrl_parts
+        self.mask_ctrl_pts = masks_ctrl_pts
         self.scale_factors = 1.0
         assert n_ctrl_parts <= 2, "Only support 1 or 2 control parts"
         print("UI Controls:")
         print("- Set 1: WASD (XY movement), QE (Z movement)")
         print("- Set 2: IJKL (XY movement), UO (Z movement)")
+        self.inv_ctrl = -1.0 if inv_ctrl else 1.0
         self.key_mappings = {
             # Set 1 controls
-            "w": (0, np.array([0.005, 0, 0])),
-            "s": (0, np.array([-0.005, 0, 0])),
-            "a": (0, np.array([0, -0.005, 0])),
-            "d": (0, np.array([0, 0.005, 0])),
+            "w": (0, np.array([0.005, 0, 0]) * self.inv_ctrl),
+            "s": (0, np.array([-0.005, 0, 0]) * self.inv_ctrl),
+            "a": (0, np.array([0, -0.005, 0]) * self.inv_ctrl),
+            "d": (0, np.array([0, 0.005, 0]) * self.inv_ctrl),
             "e": (0, np.array([0, 0, 0.005])),
             "q": (0, np.array([0, 0, -0.005])),
             
             # Set 2 controls
-            "i": (1, np.array([0.005, 0, 0])),
-            "k": (1, np.array([-0.005, 0, 0])),
-            "j": (1, np.array([0, -0.005, 0])),
-            "l": (1, np.array([0, 0.005, 0])),
+            "i": (1, np.array([0.005, 0, 0]) * self.inv_ctrl),
+            "k": (1, np.array([-0.005, 0, 0]) * self.inv_ctrl),
+            "j": (1, np.array([0, -0.005, 0]) * self.inv_ctrl),
+            "l": (1, np.array([0, 0.005, 0]) * self.inv_ctrl),
             "o": (1, np.array([0, 0, 0.005])),
             "u": (1, np.array([0, 0, -0.005]))
         }
         self.pressed_keys = set()
-        self.init_control_visualizer()
+        self.w2c = w2c
+        self.intrinsic = intrinsic
+        self.init_control_ui()
+        if n_ctrl_parts > 1:
+            hand_positions = []
+            for i in range(2):
+                target_points = torch.from_numpy(vis_controller_points[self.mask_ctrl_pts[i]]).to("cuda")
+                hand_positions.append(self._find_closest_point(target_points))
+            self.hand_left_pos, self.hand_right_pos = hand_positions
+        else:
+            target_points = torch.from_numpy(vis_controller_points).to("cuda")
+            self.hand_left_pos = self._find_closest_point(target_points)
+            
 
 
         object_colors = self.object_colors.cpu().numpy()[0]
@@ -1153,7 +1279,7 @@ class InvPhyTrainerWarp:
 
             # TODO: render with gaussians and paste the image on top of the frame
             # frame = (frame / 255).astype(np.float32)
-            results = render(view, gaussians, None, background)
+            results = render_gaussian(view, gaussians, None, background)
             rendering = results["render"]  # (4, H, W)
             image = rendering.permute(1, 2, 0).detach().cpu().numpy()
 
@@ -1164,6 +1290,12 @@ class InvPhyTrainerWarp:
 
             # Continue frame compositing
             frame_timer.start()
+
+            # composition code from Hanxiao
+            image_mask = np.logical_and(
+                (image != 255).any(axis=2), image[:, :, 3] > 100 / 255
+            )
+            image[~image_mask, 3] = 0
 
             alpha = image[..., 3:4]
             rgb = image[..., :3] * 255
@@ -1267,8 +1399,19 @@ class InvPhyTrainerWarp:
                         current_target[masks_ctrl_pts[i]] += torch.tensor(
                             target_change[i], dtype=torch.float32, device=cfg.device
                         )
+                        if i == 0:
+                            self.hand_left_pos += torch.tensor(
+                                target_change[i], dtype=torch.float32, device=cfg.device
+                            )
+                        if i == 1:
+                            self.hand_right_pos += torch.tensor(
+                                target_change[i], dtype=torch.float32, device=cfg.device
+                            )
             else:
                 current_target += torch.tensor(
+                    target_change, dtype=torch.float32, device=cfg.device
+                )
+                self.hand_left_pos += torch.tensor(
                     target_change, dtype=torch.float32, device=cfg.device
                 )
 
@@ -1398,7 +1541,7 @@ class InvPhyTrainerWarp:
         cfg.num_substeps = round(1.0 / cfg.FPS / cfg.dt)
         cfg.collision_dist = 0.005
 
-        self.simulator = SpringMassSystemWarpAccelerate(
+        self.simulator = SpringMassSystemWarpAccelerate(   # TODO: change to non-accelerate version
             self.init_vertices,
             self.init_springs,
             self.init_rest_lengths,

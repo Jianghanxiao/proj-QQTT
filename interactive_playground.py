@@ -36,6 +36,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--case_name", type=str, default="single_lift_rope")
     parser.add_argument("--n_ctrl_parts", type=int, default=1)
+    parser.add_argument("--inv_ctrl", action="store_true", help="invert horizontal control direction")
     args = parser.parse_args()
 
     base_path = args.base_path
@@ -80,7 +81,7 @@ if __name__ == "__main__":
     cfg.intrinsics = np.array([np.array(intr) for intr in camera_info['intrinsics']])
     cfg.WH = (848, 480)  # fixed resolution
     exp_name = 'init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0'
-    gaussians_path = f"/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output/{case_name}/{exp_name}/point_cloud/iteration_10000/point_cloud.ply"
+    gaussians_path = f"/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/gaussian_splatting/output/{case_name}/{exp_name}/point_cloud/iteration_10000/point_cloud.ply"
 
     cfg.mask_path = f"{base_path}/{case_name}/mask"
 
@@ -92,7 +93,7 @@ if __name__ == "__main__":
     )
 
     best_model_path = glob.glob(f"experiments/{case_name}/train/best_*.pth")[0]
-    trainer.interactive_playground(best_model_path, gaussians_path, args.n_ctrl_parts)
+    trainer.interactive_playground(best_model_path, gaussians_path, args.n_ctrl_parts, args.inv_ctrl)
 
 
     # TODO: installation commands
