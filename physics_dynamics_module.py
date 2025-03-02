@@ -181,7 +181,19 @@ class PhysDynamicModule:
 
         final_points = np.array(source.transform(reg_p2p.transformation).points)
 
-        # o3d.visualization.draw_geometries([source, target])
+        # controller_meshes = []
+        # # Use sphere mesh for each controller point
+        # for j in range(self.init_controller_points.shape[0]):
+        #     origin = self.init_controller_points[j]
+        #     origin_color = [1, 0, 0]
+        #     controller_mesh = o3d.geometry.TriangleMesh.create_sphere(
+        #         radius=0.01
+        #     ).translate(origin)
+        #     controller_mesh.compute_vertex_normals()
+        #     controller_mesh.paint_uniform_color(origin_color)
+        #     controller_meshes.append(controller_mesh)
+
+        # o3d.visualization.draw_geometries([source, target, controller_meshes])
 
         return final_points
 
