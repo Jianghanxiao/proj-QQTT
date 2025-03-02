@@ -46,6 +46,9 @@ class RealData:
         # self.object_colors = torch.tensor(
         #     object_colors, dtype=torch.float32, device=cfg.device
         # )
+        self.original_object_colors = torch.tensor(
+            object_colors, dtype=torch.float32, device=cfg.device
+        )
         # Apply the rainbow color to the object_colors
         rainbow_colors = torch.tensor(
             rainbow_colors, dtype=torch.float32, device=cfg.device

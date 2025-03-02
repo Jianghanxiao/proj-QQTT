@@ -36,6 +36,8 @@ experiments*/
 gnn_test/
 exp_results/
 temp_experiments/
+MPC/
+robot_data/
 
 
 # Byte-compiled / optimized / DLL files

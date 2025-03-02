@@ -49,6 +49,26 @@ def copy_vec3(data: wp.array(dtype=wp.vec3), origin: wp.array(dtype=wp.vec3)):
 
 
 @wp.kernel(enable_backward=False)
+def copy_vec3_idx(
+    data: wp.array2d(dtype=wp.vec3), idx: int, origin: wp.array(dtype=wp.vec3)
+):
+    tid = wp.tid()
+    origin[tid] = data[idx][tid]
+
+
+@wp.kernel(enable_backward=False)
+def copy_vec3_2d(data: wp.array2d(dtype=wp.vec3), origin: wp.array2d(dtype=wp.vec3)):
+    i, j = wp.tid()
+    origin[i][j] = data[i][j]
+
+
+@wp.kernel(enable_backward=False)
+def add_idx(idx: wp.array(dtype=wp.int32)):
+    tid = wp.tid()
+    idx[tid] += 1
+
+
+@wp.kernel(enable_backward=False)
 def copy_int(data: wp.array(dtype=wp.int32), origin: wp.array(dtype=wp.int32)):
     tid = wp.tid()
     origin[tid] = data[tid]
@@ -63,8 +83,8 @@ def copy_float(data: wp.array(dtype=wp.float32), origin: wp.array(dtype=wp.float
 @wp.kernel(enable_backward=False)
 def set_control_points(
     num_substeps: int,
-    original_control_point: wp.array(dtype=wp.vec3),
-    target_control_point: wp.array(dtype=wp.vec3),
+    control_points: wp.array2d(dtype=wp.vec3),
+    frame_idx: wp.array(dtype=wp.int32),
     step: int,
     control_x: wp.array(dtype=wp.vec3),
 ):
@@ -73,8 +93,9 @@ def set_control_points(
 
     t = float(step + 1) / float(num_substeps)
     control_x[tid] = (
-        original_control_point[tid]
-        + (target_control_point[tid] - original_control_point[tid]) * t
+        control_points[frame_idx[0] - 1][tid]
+        + (control_points[frame_idx[0]][tid] - control_points[frame_idx[0] - 1][tid])
+        * t
     )
 
 
@@ -565,7 +586,7 @@ def compute_simple_loss(
     wp.atomic_add(loss, 0, final_simple_loss)
 
 
-class SpringMassSystemWarp:
+class SpringMassSystemWarpAccelerate:
     def __init__(
         self,
         init_vertices,
@@ -637,6 +658,11 @@ class SpringMassSystemWarp:
             controller_points.shape[1] if not controller_points is None else 0
         )
         self.controller_points = controller_points
+        self.wp_controller_points = wp.from_torch(
+            controller_points, dtype=wp.vec3, requires_grad=False
+        )
+
+        self.frame_idx = wp.zeros(1, dtype=wp.int32, requires_grad=False)
 
         # Deal with the any collision detection
         self.object_collision_flag = 0
@@ -803,19 +829,30 @@ class SpringMassSystemWarp:
         else:
             self.tape = wp.Tape()
 
+    def reset_idx(self):
+        self.frame_idx.zero_()
+
+    def set_controller_targets(self):
+        wp.launch(
+            copy_vec3_2d,
+            dim=self.controller_points.shape[:2],
+            inputs=[self.controller_points],
+            outputs=[self.wp_controller_points],
+        )
+
     def set_controller_target(self, frame_idx, pure_inference=False):
         if self.controller_points is not None:
             # Set the controller points
             wp.launch(
-                copy_vec3,
+                copy_vec3_idx,
                 dim=self.num_control_points,
-                inputs=[self.controller_points[frame_idx - 1]],
+                inputs=[self.wp_controller_points, frame_idx - 1],
                 outputs=[self.wp_original_control_point],
             )
             wp.launch(
-                copy_vec3,
+                copy_vec3_idx,
                 dim=self.num_control_points,
-                inputs=[self.controller_points[frame_idx]],
+                inputs=[self.wp_controller_points, frame_idx],
                 outputs=[self.wp_target_control_point],
             )
 
@@ -891,13 +928,13 @@ class SpringMassSystemWarp:
                 copy_vec3,
                 dim=self.num_object_points,
                 inputs=[wp_x],
-                outputs=[self.wp_states[0].wp_x],
+                outputs=[self.wp_states[-1].wp_x],
             )
             wp.launch(
                 copy_vec3,
                 dim=self.num_object_points,
                 inputs=[wp_v],
-                outputs=[self.wp_states[0].wp_v],
+                outputs=[self.wp_states[-1].wp_v],
             )
 
     def set_acc_count(self, acc_count):
@@ -940,17 +977,28 @@ class SpringMassSystemWarp:
         )
 
     def step(self):
+        wp.launch(
+            add_idx,
+            dim=1,
+            inputs=[self.frame_idx],
+        )
         for i in range(self.num_substeps):
+            if i == 0:
+                k = -1
+            else:
+                k = i
+
             self.wp_states[i].clear_forces()
             if not self.controller_points is None:
+
                 # Set the control point
                 wp.launch(
                     set_control_points,
                     dim=self.num_control_points,
                     inputs=[
                         self.num_substeps,
-                        self.wp_original_control_point,
-                        self.wp_target_control_point,
+                        self.wp_controller_points,
+                        self.frame_idx,
                         i,
                     ],
                     outputs=[self.wp_states[i].wp_control_x],
@@ -961,8 +1009,8 @@ class SpringMassSystemWarp:
                 kernel=eval_springs,
                 dim=self.n_springs,
                 inputs=[
-                    self.wp_states[i].wp_x,
-                    self.wp_states[i].wp_v,
+                    self.wp_states[k].wp_x,
+                    self.wp_states[k].wp_v,
                     self.wp_states[i].wp_control_x,
                     self.wp_states[i].wp_control_v,
                     self.num_object_points,
@@ -986,7 +1034,7 @@ class SpringMassSystemWarp:
                 kernel=update_vel_from_force,
                 dim=self.num_object_points,
                 inputs=[
-                    self.wp_states[i].wp_v,
+                    self.wp_states[k].wp_v,
                     self.wp_states[i].wp_vertice_forces,
                     self.wp_masses,
                     self.dt,
@@ -1002,7 +1050,7 @@ class SpringMassSystemWarp:
                     kernel=object_collision,
                     dim=self.num_object_points,
                     inputs=[
-                        self.wp_states[i].wp_x,
+                        self.wp_states[k].wp_x,
                         self.wp_states[i].wp_v_before_collision,
                         self.wp_masses,
                         self.wp_masks,
@@ -1020,7 +1068,7 @@ class SpringMassSystemWarp:
                 kernel=integrate_ground_collision,
                 dim=self.num_object_points,
                 inputs=[
-                    self.wp_states[i].wp_x,
+                    self.wp_states[k].wp_x,
                     self.wp_states[i].wp_v_before_ground,
                     self.wp_collide_elas,
                     self.wp_collide_fric,

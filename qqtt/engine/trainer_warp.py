@@ -1,6 +1,9 @@
 from qqtt.data import RealData, SimpleData
 from qqtt.utils import logger, visualize_pc, cfg
-from qqtt.model.diff_simulator import SpringMassSystemWarp
+from qqtt.model.diff_simulator import (
+    SpringMassSystemWarp,
+    SpringMassSystemWarpAccelerate,
+)
 import open3d as o3d
 import numpy as np
 import torch
@@ -1309,3 +1312,247 @@ class InvPhyTrainerWarp:
 
         
         listener.stop()
+
+    def load_model_transfer(
+        self, model_path, init_controller_points, final_points, action_num, dt=5e-5
+    ):
+        # Load the model
+        logger.info(f"Load model from {model_path}")
+        checkpoint = torch.load(model_path, map_location=cfg.device)
+
+        spring_Y = checkpoint["spring_Y"]
+        collide_elas = checkpoint["collide_elas"]
+        collide_fric = checkpoint["collide_fric"]
+        collide_object_elas = checkpoint["collide_object_elas"]
+        collide_object_fric = checkpoint["collide_object_fric"]
+        num_object_springs = checkpoint["num_object_springs"]
+
+        spring_Y = spring_Y[: self.num_object_springs]
+
+        self.init_controller_points = init_controller_points.contiguous()
+
+        # Reconnect the springs between the controller points and the object points
+        controller_points = self.init_controller_points.cpu().numpy()
+        springs = self.init_springs.cpu().numpy()[: self.num_object_springs]
+
+        rest_lengths = np.linalg.norm(
+            final_points[springs[:, 0]] - final_points[springs[:, 1]], axis=1
+        )
+
+        springs = springs.tolist()
+        rest_lengths = rest_lengths.tolist()
+        # Update the connection between the final points and the controller points
+        first_frame_controller_points = controller_points
+        points = np.concatenate([final_points, first_frame_controller_points], axis=0)
+        object_pcd = o3d.geometry.PointCloud()
+        object_pcd.points = o3d.utility.Vector3dVector(final_points)
+        pcd_tree = o3d.geometry.KDTreeFlann(object_pcd)
+
+        # Process to get the connection distance among the controller points and object points
+        # Locate the nearest object point for each controller point
+        kdtree = KDTree(final_points)
+        _, idx = kdtree.query(first_frame_controller_points, k=1)
+        # find the distances
+        distances = np.linalg.norm(
+            final_points[idx] - first_frame_controller_points, axis=1
+        )
+        # find the indices of the top 4 controller points that are close
+        controller_radius = np.ones(first_frame_controller_points.shape[0]) * 0.01
+        controller_radius = distances + 0.005
+
+        for i in range(len(first_frame_controller_points)):
+            [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
+                first_frame_controller_points[i],
+                controller_radius[i],
+                30,
+            )
+            for j in idx:
+                springs.append([self.num_all_points + i, j])
+                rest_lengths.append(
+                    np.linalg.norm(first_frame_controller_points[i] - points[j])
+                )
+
+        self.init_springs = torch.tensor(
+            np.array(springs), dtype=torch.int32, device=cfg.device
+        )
+
+        self.init_rest_lengths = torch.tensor(
+            np.array(rest_lengths), dtype=torch.float32, device=cfg.device
+        )
+        self.init_masses = torch.tensor(
+            np.ones(len(points)), dtype=torch.float32, device=cfg.device
+        )
+
+        self.init_vertices = torch.tensor(
+            points,
+            dtype=torch.float32,
+            device=cfg.device,
+        )
+        self.controller_points = torch.tensor(
+            [controller_points] * action_num,
+            dtype=torch.float32,
+            device=cfg.device,
+        )
+
+        cfg.dt = dt
+        cfg.num_substeps = round(1.0 / cfg.FPS / cfg.dt)
+        cfg.collision_dist = 0.005
+
+        self.simulator = SpringMassSystemWarpAccelerate(
+            self.init_vertices,
+            self.init_springs,
+            self.init_rest_lengths,
+            self.init_masses,
+            dt=cfg.dt,
+            num_substeps=cfg.num_substeps,
+            spring_Y=cfg.init_spring_Y,
+            collide_elas=cfg.collide_elas,
+            collide_fric=cfg.collide_fric,
+            dashpot_damping=cfg.dashpot_damping,
+            drag_damping=cfg.drag_damping,
+            collide_object_elas=cfg.collide_object_elas,
+            collide_object_fric=cfg.collide_object_fric,
+            init_masks=self.init_masks,
+            collision_dist=cfg.collision_dist,
+            init_velocities=self.init_velocities,
+            num_object_points=self.num_all_points,
+            num_surface_points=self.num_surface_points,
+            num_original_points=self.num_original_points,
+            controller_points=self.controller_points,
+            reverse_z=cfg.reverse_z,
+            spring_Y_min=cfg.spring_Y_min,
+            spring_Y_max=cfg.spring_Y_max,
+            gt_object_points=self.object_points,
+            gt_object_visibilities=self.object_visibilities,
+            gt_object_motions_valid=self.object_motions_valid,
+            self_collision=cfg.self_collision,
+        )
+
+        spring_Y = torch.cat(
+            [
+                spring_Y,
+                3e4
+                * torch.ones(
+                    self.simulator.n_springs - self.num_object_springs,
+                    dtype=torch.float32,
+                    device=cfg.device,
+                ),
+            ]
+        )
+
+        self.simulator.set_spring_Y(torch.log(spring_Y).detach().clone())
+        self.simulator.set_collide(
+            collide_elas.detach().clone(), collide_fric.detach().clone()
+        )
+        self.simulator.set_collide_object(
+            collide_object_elas.detach().clone(), collide_object_fric.detach().clone()
+        )
+
+    def rollout(self, controller_points_array, visualize=False):
+        self.simulator.reset_idx()
+
+        self.simulator.set_init_state(
+            self.simulator.wp_init_vertices,
+            self.simulator.wp_init_velocities,
+            pure_inference=True,
+        )
+
+        self.simulator.controller_points = torch.cat(
+            [self.init_controller_points.unsqueeze(0), controller_points_array], dim=0
+        )
+        self.simulator.set_controller_targets()
+
+        if visualize:
+            vis = o3d.visualization.Visualizer()
+            vis.create_window(visible=True)
+
+            coordinate = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+            vis.add_geometry(coordinate)
+
+            vis_vertices = (
+                wp.to_torch(self.simulator.wp_states[0].wp_x, requires_grad=False)
+                .cpu()
+                .numpy()
+            )
+
+            # vis_controller_points = current_target.cpu().numpy()
+
+            object_colors = self.object_colors.cpu().numpy()[0]
+            if object_colors.shape[0] < vis_vertices.shape[0]:
+                # If the object_colors is not the same as object_points, fill the colors with black
+                object_colors = np.concatenate(
+                    [
+                        object_colors,
+                        np.ones(
+                            (
+                                vis_vertices.shape[0] - object_colors.shape[0],
+                                3,
+                            )
+                        )
+                        * 0.3,
+                    ],
+                    axis=0,
+                )
+
+            object_pcd = o3d.geometry.PointCloud()
+            object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
+            object_pcd.colors = o3d.utility.Vector3dVector(object_colors)
+            vis.add_geometry(object_pcd)
+
+            # controller_meshes = []
+            # prev_center = []
+            # if vis_controller_points is not None:
+            #     # Use sphere mesh for each controller point
+            #     for j in range(vis_controller_points.shape[0]):
+            #         origin = vis_controller_points[j]
+            #         origin_color = [1, 0, 0]
+            #         controller_mesh = o3d.geometry.TriangleMesh.create_sphere(
+            #             radius=0.01
+            #         ).translate(origin)
+            #         controller_mesh.compute_vertex_normals()
+            #         controller_mesh.paint_uniform_color(origin_color)
+            #         controller_meshes.append(controller_mesh)
+            #         vis.add_geometry(controller_meshes[-1])
+            #         prev_center.append(origin)
+
+            view_control = vis.get_view_control()
+            camera_params = o3d.camera.PinholeCameraParameters()
+            width, height = cfg.WH
+            intrinsic = cfg.intrinsics[0]
+            w2c = cfg.w2cs[0]
+            intrinsic_parameter = o3d.camera.PinholeCameraIntrinsic(
+                width, height, intrinsic
+            )
+            camera_params.intrinsic = intrinsic_parameter
+            camera_params.extrinsic = w2c
+            view_control.convert_from_pinhole_camera_parameters(
+                camera_params, allow_arbitrary=True
+            )
+
+        action_num = controller_points_array.shape[0]
+        for i in range(action_num):
+
+            if self.simulator.object_collision_flag:
+                self.simulator.update_collision_graph()
+            wp.capture_launch(self.simulator.forward_graph)
+
+            # x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
+            if visualize:
+                # add the visualization code here
+                vis_vertices = x.cpu().numpy()
+
+                object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
+                vis.update_geometry(object_pcd)
+
+                # vis_controller_points = current_target.cpu().numpy()
+                # if vis_controller_points is not None:
+                #     for j in range(vis_controller_points.shape[0]):
+                #         origin = vis_controller_points[j]
+                #         controller_meshes[j].translate(origin - prev_center[j])
+                #         vis.update_geometry(controller_meshes[j])
+                #         prev_center[j] = origin
+                vis.poll_events()
+                vis.update_renderer()
+
+        x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
+        return x
