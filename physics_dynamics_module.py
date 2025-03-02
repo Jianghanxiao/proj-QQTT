@@ -118,8 +118,13 @@ class PhysDynamicModule:
         )
 
         self.init_controller_points = (
-            torch.matmul(init_controller_rot, self.controller_points_position.T).T
+            torch.einsum(
+                "gij,nj->gni", init_controller_rot, self.controller_points_position
+            )
             + init_controller_xyz
+        )
+        self.init_controller_points = torch.cat(
+            list(self.init_controller_points), dim=0
         )
 
         # Do the alignment between the digital twin and the observations
@@ -184,15 +189,21 @@ class PhysDynamicModule:
         batch_size = eef_xyz.shape[0]
         assert batch_size == self.batch_size
         all_pts = []
+
         for i in range(batch_size):
             with wp.ScopedTimer("rollout"):
                 # Transform the controller points position based on the rotation and translation
                 controller_points_array = torch.einsum(
-                    "bij,nj->bni",
-                    eef_rot[i],  # shape: (batch_size, 3, 3)
+                    "bgij,nj->bgni",
+                    eef_rot[i],  # shape: (act_num, grip_num, 3, 3)
                     self.controller_points_position,  # shape: (8, 3)
                 )
-                controller_points_array = controller_points_array + eef_xyz[i][:, None, :]
+                controller_points_array = (
+                    controller_points_array + eef_xyz[i][:, :, None, :]
+                )
+                controller_points_array = torch.reshape(
+                    controller_points_array, [controller_points_array.shape[0], -1, 3]
+                )
                 controller_points_array = torch.tensor(
                     controller_points_array, dtype=torch.float, device=self.device
                 ).contiguous()
@@ -200,6 +211,7 @@ class PhysDynamicModule:
                 all_pts.append(pts)
         # all_pts = torch.stack(all_pts, dim=0)
         return all_pts
+
 
 #     def rollout_parallel(self, eef_xyz, eef_rot, visualize=False):
 #         result_queue = mp.Queue()
@@ -256,33 +268,39 @@ class PhysDynamicModule:
 
 
 if __name__ == "__main__":
-    init_pcd_path = (
-        "/home/hanxiao/Downloads/episode_0000 (1)/episode_0000/pcd_clean_new/000000.npz"
-    )
+    init_pcd_path = "/home/hanxiao/Downloads/episode_0000/pcd_clean_new/000000.npz"
     init_pcd = np.load(init_pcd_path)
     init_pts = init_pcd["pts"]
     init_colors = init_pcd["colors"]
 
     init_controller_xyz = np.array(
-        [3.044547887605847380e-01, 2.841108186878805730e-01, -1.315379715678757083e-02]
+        [
+            [
+                3.044547887605847380e-01,
+                2.841108186878805730e-01,
+                -1.315379715678757083e-02,
+            ]
+        ]
     )
     init_controller_rot = np.array(
         [
             [
-                -6.480154314145059047e-02,
-                9.962636060017686646e-01,
-                -5.709279606780431893e-02,
-            ],
-            [
-                -9.961174236442396079e-01,
-                -6.799639288895997780e-02,
-                -5.591573004489115012e-02,
-            ],
-            [
-                -5.958891103930036293e-02,
-                5.324770333491749691e-02,
-                9.968018076682580997e-01,
-            ],
+                [
+                    -6.480154314145059047e-02,
+                    9.962636060017686646e-01,
+                    -5.709279606780431893e-02,
+                ],
+                [
+                    -9.961174236442396079e-01,
+                    -6.799639288895997780e-02,
+                    -5.591573004489115012e-02,
+                ],
+                [
+                    -5.958891103930036293e-02,
+                    5.324770333491749691e-02,
+                    9.968018076682580997e-01,
+                ],
+            ]
         ]
     )
 
@@ -307,7 +325,7 @@ if __name__ == "__main__":
     controller_xyzs = []
     controller_rots = []
     for i in range(142):
-        path = f"/home/hanxiao/Downloads/episode_0000 (1)/episode_0000/robot/{(i+1):06d}.txt"
+        path = f"/home/hanxiao/Downloads/episode_0000/robot/{(i+1):06d}.txt"
         with open(path, "r") as f:
             lines = f.readlines()
             controller_xyz = np.array(
@@ -326,12 +344,17 @@ if __name__ == "__main__":
     controller_rots = np.array(controller_rots)
 
     print("Finish initialization!!!!!!!!!!!!!!!!!!!!")
+    # Batch_size * action_num * num_gripper * 3
     results = dynamic_module.rollout_serialize(
         torch.tensor(
-            [controller_xyzs] * batch_size, dtype=torch.float32, device="cuda"
+            [controller_xyzs[:, None, :]] * batch_size,
+            dtype=torch.float32,
+            device="cuda",
         ),
         torch.tensor(
-            [controller_rots] * batch_size, dtype=torch.float32, device="cuda"
+            [controller_rots[:, None, :]] * batch_size,
+            dtype=torch.float32,
+            device="cuda",
         ),
         visualize=False,
     )
