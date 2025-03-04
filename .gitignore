@@ -38,6 +38,7 @@ exp_results/
 temp_experiments/
 MPC/
 robot_data/
+episode_0000/
 
 
 # Byte-compiled / optimized / DLL files

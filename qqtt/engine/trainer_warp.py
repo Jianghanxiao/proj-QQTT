@@ -16,15 +16,17 @@ import pickle
 import cv2
 from pynput import keyboard
 
-# TODO: 3dgs library
 from gaussian_splatting.scene.gaussian_model import GaussianModel
 from gaussian_splatting.scene.cameras import Camera
 from gaussian_splatting.gaussian_renderer import render as render_gaussian
 from gaussian_splatting.dynamic_utils import interpolate_motions_feng, interpolate_motions_feng_speedup, knn_weights, knn_weights_sparse, get_topk_indices, calc_weights_vals_from_indices
 from gaussian_splatting.utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
 from gaussian_splatting.render import remove_gaussians_with_low_opacity
+from gaussian_splatting.rotation_utils import quaternion_multiply, matrix_to_quaternion
 
 from sklearn.cluster import KMeans
+import copy
+import time
 
 
 class InvPhyTrainerWarp:
@@ -598,7 +600,7 @@ class InvPhyTrainerWarp:
         cfg.num_substeps = round(1.0 / cfg.FPS / cfg.dt)
         cfg.collision_dist = 0.005
 
-        self.simulator = SpringMassSystemWarp(    # TODO: this one
+        self.simulator = SpringMassSystemWarp(
             self.init_vertices,
             self.init_springs,
             self.init_rest_lengths,
@@ -744,20 +746,25 @@ class InvPhyTrainerWarp:
         height = cfg.WH[1]
         width = cfg.WH[0]
 
-        self.arrow_fill = cv2.imread("./assets/arrow_fill.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
-        self.arrow_empty = cv2.imread("./assets/arrow_empty.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
-        
-        self.arrow_size = 50
-        self.arrow_fill = cv2.resize(self.arrow_fill, (self.arrow_size, self.arrow_size))
-        self.arrow_empty = cv2.resize(self.arrow_empty, (self.arrow_size, self.arrow_size))
-    
-        self.bottom_margin = 50  # Margin from bottom of screen
-        bottom_y = height - self.bottom_margin
-        top_y = height - (self.bottom_margin + self.arrow_size)
-        
-        spacing = self.arrow_size
+        self.arrow_size = 30
 
-        self.edge_buffer = max(self.arrow_size // 2, 50)
+        self.arrow_fill_orig = cv2.imread("./assets/arrow_fill_v1.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
+        self.arrow_empty_orig = cv2.imread("./assets/arrow_empty.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
+        self.arrow_1_orig = cv2.imread("./assets/arrow_1.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
+        self.arrow_2_orig = cv2.imread("./assets/arrow_2.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
+
+        # self.arrow_fill = cv2.resize(self.arrow_fill_orig, (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA)
+        # self.arrow_empty = cv2.resize(self.arrow_empty_orig, (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA)
+        # self.arrow_1 = cv2.resize(self.arrow_1_orig, (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA)
+        # self.arrow_2 = cv2.resize(self.arrow_2_orig, (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA)        
+
+        spacing = self.arrow_size + 5
+    
+        self.bottom_margin = 25  # Margin from bottom of screen
+        bottom_y = height - self.bottom_margin
+        top_y = height - self.bottom_margin - spacing
+
+        self.edge_buffer = self.bottom_margin
         set1_margin_x = self.edge_buffer                       # Add buffer from left edge
         set2_margin_x = width - self.edge_buffer
         
@@ -771,28 +778,44 @@ class InvPhyTrainerWarp:
         }
         
         self.arrow_positions_set2 = {
-            "u": (set2_margin_x, top_y),                # Up
-            "i": (set2_margin_x - spacing*2, top_y),    # Forward
-            "j": (set2_margin_x - spacing*3, bottom_y), # Left
-            "k": (set2_margin_x - spacing*2, bottom_y), # Backward
-            "l": (set2_margin_x - spacing, bottom_y),   # Right
-            "o": (set2_margin_x, bottom_y),             # Down
+            "u": (set2_margin_x - spacing*3, top_y),    # Up
+            "i": (set2_margin_x - spacing*1, top_y),    # Forward
+            "j": (set2_margin_x - spacing*2, bottom_y), # Left
+            "k": (set2_margin_x - spacing*1, bottom_y), # Backward
+            "l": (set2_margin_x, bottom_y),             # Right
+            "o": (set2_margin_x - spacing*3, bottom_y), # Down
         }
         
         # Create rotation matrices for each arrow
+        # self.rotations = {
+        #     "w": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 0, 1),   # Forward
+        #     "a": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 90, 1),  # Left
+        #     "s": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 180, 1), # Backward
+        #     "d": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 270, 1), # Right
+        #     "q": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 0, 1),   # Up
+        #     "e": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 180, 1), # Down
+        #     "i": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 0, 1),   # Forward
+        #     "j": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 90, 1),  # Left
+        #     "k": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 180, 1), # Backward
+        #     "l": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 270, 1), # Right
+        #     "u": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 0, 1),   # Up
+        #     "o": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 180, 1), # Down
+        # }
+
+        self.interm_size = 512
         self.rotations = {
-            "w": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 0, 1),   # Forward
-            "a": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 90, 1),  # Left
-            "s": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 180, 1), # Backward
-            "d": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 270, 1), # Right
-            "q": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 0, 1),   # Up
-            "e": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 180, 1), # Down
-            "i": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 0, 1),   # Forward
-            "j": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 90, 1),  # Left
-            "k": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 180, 1), # Backward
-            "l": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 270, 1), # Right
-            "u": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 0, 1),   # Up
-            "o": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 180, 1), # Down
+            "w": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 0, 1),   # Forward
+            "a": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 90, 1),  # Left
+            "s": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 180, 1), # Backward
+            "d": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 270, 1), # Right
+            "q": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 0, 1),   # Up
+            "e": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 180, 1), # Down
+            "i": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 0, 1),   # Forward
+            "j": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 90, 1),  # Left
+            "k": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 180, 1), # Backward
+            "l": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 270, 1), # Right
+            "u": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 0, 1),   # Up
+            "o": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 180, 1), # Down
         }
 
         self.hand_left = cv2.imread("./assets/Picture2.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
@@ -801,20 +824,65 @@ class InvPhyTrainerWarp:
         self.hand_left_pos = torch.tensor([0.0, 0.0, 0.0], device=cfg.device)
         self.hand_right_pos = torch.tensor([0.0, 0.0, 0.0], device=cfg.device)
 
+        # pre-compute all rotated arrows to avoid aliasing
+        self.arrow_rotated_filled = {}
+        self.arrow_rotated_empty = {}
+        for key in self.arrow_positions_set1:
+            self.arrow_rotated_filled[key] = cv2.resize(
+                self._rotate_arrow(
+                    cv2.resize(self.arrow_1_orig, (self.interm_size, self.interm_size), interpolation=cv2.INTER_AREA),
+                key), 
+                (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA
+            )
+            self.arrow_rotated_empty[key] = cv2.resize(
+                self._rotate_arrow(
+                    cv2.resize(self.arrow_empty_orig, (self.interm_size, self.interm_size), interpolation=cv2.INTER_AREA),
+                key), 
+                (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA
+            )
+        for key in self.arrow_positions_set2:
+            self.arrow_rotated_filled[key] = cv2.resize(
+                self._rotate_arrow(
+                    cv2.resize(self.arrow_2_orig, (self.interm_size, self.interm_size), interpolation=cv2.INTER_AREA),
+                key), 
+                (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA
+            )
+            self.arrow_rotated_empty[key] = cv2.resize(
+                self._rotate_arrow(
+                    cv2.resize(self.arrow_empty_orig, (self.interm_size, self.interm_size), interpolation=cv2.INTER_AREA),
+                key), 
+                (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA
+            )
+
     def _rotate_arrow(self, arrow, key):
         rotation_matrix = self.rotations[key]
         rotated = cv2.warpAffine(
             arrow,
             rotation_matrix,
-            (self.arrow_size, self.arrow_size),
+            (self.interm_size, self.interm_size),
             flags=cv2.INTER_LINEAR,
             borderMode=cv2.BORDER_TRANSPARENT
         )
         return rotated
 
-    def _overlay_arrow(self, background, arrow, position, key):
+    # def _rotate_arrow(self, arrow, key):
+    #     rotation_matrix = self.rotations[key]
+    #     rotated = cv2.warpAffine(
+    #         arrow,
+    #         rotation_matrix,
+    #         (self.arrow_size, self.arrow_size),
+    #         flags=cv2.INTER_LINEAR,
+    #         borderMode=cv2.BORDER_TRANSPARENT
+    #     )
+    #     return rotated
+
+    def _overlay_arrow(self, background, arrow, position, key, filled=True):
         x, y = position
-        rotated_arrow = self._rotate_arrow(arrow, key)
+        # rotated_arrow = self._rotate_arrow(arrow, key)
+        if filled:
+            rotated_arrow = self.arrow_rotated_filled[key].copy()
+        else:
+            rotated_arrow = self.arrow_rotated_empty[key].copy()
         
         h, w = rotated_arrow.shape[:2]
         
@@ -926,32 +994,48 @@ class InvPhyTrainerWarp:
         result = frame.copy()
 
         result = self._overlay_hand_icons(result)
+
+        # overlay an transparent white mask on the bottom left and bottom right corners with width trans_width, and height trans_height
+        trans_width = 160
+        trans_height = 120
+        overlay = result.copy()
+
+        bottom_left_pt1 = (0, cfg.WH[1] - trans_height)
+        bottom_left_pt2 = (trans_width, cfg.WH[1])
+        cv2.rectangle(overlay, bottom_left_pt1, bottom_left_pt2, (255, 255, 255), -1)
+
+        if self.n_ctrl_parts == 2:
+            bottom_right_pt1 = (cfg.WH[0] - trans_width, cfg.WH[1] - trans_height)
+            bottom_right_pt2 = (cfg.WH[0], cfg.WH[1])
+            cv2.rectangle(overlay, bottom_right_pt1, bottom_right_pt2, (255, 255, 255), -1)
+
+        alpha = 0.6
+        cv2.addWeighted(overlay, alpha, result, 1 - alpha, 0, result)
         
         # Draw all buttons for Set 1 (left side)
         for key, pos in self.arrow_positions_set1.items():
             if key in pressed_keys:
-                result = self._overlay_arrow(result, self.arrow_fill, pos, key)
+                result = self._overlay_arrow(result, None, pos, key, filled=True)
             else:
-                result = self._overlay_arrow(result, self.arrow_empty, pos, key)
+                result = self._overlay_arrow(result, None, pos, key, filled=False)
         
         # Draw all buttons for Set 2 (right side)
         if self.n_ctrl_parts == 2:
             for key, pos in self.arrow_positions_set2.items():
                 if key in pressed_keys:
-                    result = self._overlay_arrow(result, self.arrow_fill, pos, key)
+                    result = self._overlay_arrow(result, None, pos, key, filled=True)
                 else:
-                    result = self._overlay_arrow(result, self.arrow_empty, pos, key)
+                    result = self._overlay_arrow(result, None, pos, key, filled=False)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.7
         thickness = 2
-        text_size_control1 = cv2.getTextSize("Control 1", font, font_scale, thickness)[0]
-        text_size_control2 = cv2.getTextSize("Control 2", font, font_scale, thickness)[0]
-        control1_x = self.edge_buffer
-        control2_x = cfg.WH[0] - self.edge_buffer - text_size_control2[0]
-        text_y = cfg.WH[1] - self.arrow_size*2 - self.bottom_margin
-        cv2.putText(result, "Control 1", (control1_x, text_y), font, font_scale, (255, 255, 255), thickness)
-        cv2.putText(result, "Control 2", (control2_x, text_y), font, font_scale, (255, 255, 255), thickness)
+        control1_x = self.edge_buffer                                 # hard coded for now
+        control2_x = cfg.WH[0] - self.edge_buffer - 113                    # hard coded for now
+        text_y = cfg.WH[1] - self.arrow_size*2 - self.bottom_margin - 10   # hard coded for now
+        cv2.putText(result, "Left Hand", (control1_x, text_y), font, font_scale, (0, 0, 0), thickness)
+        if self.n_ctrl_parts == 2:
+            cv2.putText(result, "Right Hand", (control2_x, text_y), font, font_scale, (0, 0, 0), thickness)
         
         return result
     
@@ -1013,7 +1097,7 @@ class InvPhyTrainerWarp:
 
         vis_controller_points = current_target.cpu().numpy()
 
-        # TODO: load gaussians from the gs_path
+
         gaussians = GaussianModel(sh_degree=3)
         gaussians.load_ply(gs_path)
         gaussians = remove_gaussians_with_low_opacity(gaussians, 0.1)
@@ -1023,19 +1107,7 @@ class InvPhyTrainerWarp:
         use_white_background = True        # set to True for white background
         bg_color = [1,1,1] if use_white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
-        R = np.transpose(w2c[:3,:3])
-        T = w2c[:3, 3]
-        K = torch.tensor(intrinsic, dtype=torch.float32, device="cuda")
-        focal_length_x = K[0, 0]
-        focal_length_y = K[1, 1]
-        FovY = focal2fov(focal_length_y, cfg.WH[1])
-        FovX = focal2fov(focal_length_x, cfg.WH[0])
-        view = Camera(cfg.WH, colmap_id='0000', R=R, T=T, 
-                  FoVx=FovX, FoVy=FovY, depth_params=None,
-                  image=None, invdepthmap=None,
-                  image_name='0000', uid='0000', data_device='cuda',
-                  train_test_exp=None, is_test_dataset=None, is_test_view=None,
-                  K=K, normal=None, depth=None, occ_mask=None)
+        view = self._create_gs_view(w2c, intrinsic, height, width)
         prev_x = None
         relations = None
         weights = None
@@ -1218,6 +1290,8 @@ class InvPhyTrainerWarp:
         STATS_WINDOW = 10
         frame_count = 0
 
+        ############## End Temporary timer ##############
+
 
         while True:
 
@@ -1277,7 +1351,7 @@ class InvPhyTrainerWarp:
             # 3. Rendering
             render_timer.start()
 
-            # TODO: render with gaussians and paste the image on top of the frame
+            # render with gaussians and paste the image on top of the frame
             # frame = (frame / 255).astype(np.float32)
             results = render_gaussian(view, gaussians, None, background)
             rendering = results["render"]  # (4, H, W)
@@ -1292,9 +1366,15 @@ class InvPhyTrainerWarp:
             frame_timer.start()
 
             # composition code from Hanxiao
-            image_mask = np.logical_and(
-                (image != 255).any(axis=2), image[:, :, 3] > 100 / 255
-            )
+            image = image.clip(0, 1)
+            if use_white_background:
+                image_mask = np.logical_and(
+                    (image != 1.0).any(axis=2), image[:, :, 3] > 100 / 255
+                )
+            else:
+                image_mask = np.logical_and(
+                    (image != 0.0).any(axis=2), image[:, :, 3] > 100 / 255
+                )
             image[~image_mask, 3] = 0
 
             alpha = image[..., 3:4]
@@ -1452,9 +1532,290 @@ class InvPhyTrainerWarp:
                     percentage = (avg_time / total_avg) * 100
                     print(f"{key.capitalize()}: {avg_time*1000:.2f} ms ({percentage:.1f}%)")
 
+        listener.stop()
 
         
-        listener.stop()
+    def _transform_gs(self, gaussians, M, majority_scale=1):
+
+        new_gaussians = copy.copy(gaussians)
+
+        new_xyz = gaussians.get_xyz.clone()
+        ones = torch.ones((new_xyz.shape[0], 1), device=new_xyz.device, dtype=new_xyz.dtype)
+        new_xyz = torch.cat((new_xyz, ones), dim=1)
+        print("inside:", new_xyz.max(), new_xyz.min())
+        new_xyz = new_xyz @ M.T
+        print("outside:", new_xyz.max(), new_xyz.min())
+        
+        new_rotation = gaussians.get_rotation.clone()
+        new_rotation = quaternion_multiply(matrix_to_quaternion(M[:3, :3]), new_rotation)
+        
+        new_scales = gaussians._scaling.clone()
+        new_scales += torch.log(torch.tensor(majority_scale, device=new_scales.device, dtype=new_scales.dtype))
+        
+        new_gaussians._xyz = new_xyz[:, :3]
+        new_gaussians._rotation = new_rotation
+        new_gaussians._scaling = new_scales
+        
+        return new_gaussians
+    
+    def _create_gs_view(self, w2c, intrinsic, height, width):
+        R = np.transpose(w2c[:3,:3])
+        T = w2c[:3, 3]
+        K = torch.tensor(intrinsic, dtype=torch.float32, device="cuda")
+        focal_length_x = K[0, 0]
+        focal_length_y = K[1, 1]
+        FovY = focal2fov(focal_length_y, height)
+        FovX = focal2fov(focal_length_x, width)
+        view = Camera((width, height), colmap_id='0000', R=R, T=T, 
+                FoVx=FovX, FoVy=FovY, depth_params=None,
+                image=None, invdepthmap=None,
+                image_name='0000', uid='0000', data_device='cuda',
+                train_test_exp=None, is_test_dataset=None, is_test_view=None,
+                K=K, normal=None, depth=None, occ_mask=None)
+        return view
+
+    def interactive_robot_teleop(self, gs_path, align_trans=None, align_transform=None, ctrl_pts_pos=None):
+
+        logger.info("Robot Teleoperation Start!!!!")
+        self.simulator.set_init_state(
+            self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
+        )
+        
+        # transform the gaussians (currently use rigid transform)
+        gaussians = GaussianModel(sh_degree=3)
+        gaussians.load_ply(gs_path)
+        gaussians = remove_gaussians_with_low_opacity(gaussians, 0.1)
+        gaussians.isotropic = True
+        M = torch.eye(4).to(dtype=torch.float32, device="cuda")
+        if align_trans is not None:
+            M[:3, 3] = torch.from_numpy(align_trans).to(dtype=torch.float32, device="cuda")
+        if align_transform is not None:
+            M = torch.from_numpy(align_transform).to(dtype=torch.float32, device="cuda") @ M
+        gaussians = self._transform_gs(gaussians, M)
+        current_pos = gaussians.get_xyz
+        current_rot = gaussians.get_rotation
+        prev_x = None
+        relations = None
+        weights = None
+
+        use_white_background = True        # set to True for white background
+        bg_color = [1,1,1] if use_white_background else [0, 0, 0]
+        background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+
+        # pick one view to render
+        vis_cam_idx = 2   # 1, 2 has human involved
+        FPS = cfg.FPS
+        width, height = cfg.WH
+        intrinsic = cfg.intrinsics[vis_cam_idx]
+        w2c = cfg.w2cs[vis_cam_idx]
+
+        # create gs view 
+        view = self._create_gs_view(w2c, intrinsic, height, width)
+
+        # fetch the overlay image
+        image_path = f"{cfg.episode_path}/camera_{vis_cam_idx}/rgb/000000.jpg"
+        overlay = cv2.imread(image_path)
+        overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+
+        # create visualization window and set camera parameters
+        vis = o3d.visualization.Visualizer()
+        vis.create_window(visible=False, width=width, height=height)
+        view_control = vis.get_view_control()
+        camera_params = o3d.camera.PinholeCameraParameters()
+        intrinsic_parameter = o3d.camera.PinholeCameraIntrinsic(
+            width, height, intrinsic
+        )
+        camera_params.intrinsic = intrinsic_parameter
+        camera_params.extrinsic = w2c
+        view_control.convert_from_pinhole_camera_parameters(
+            camera_params, allow_arbitrary=True
+        )
+
+        # (optional) visualization of the object points
+        # vis_vertices = (
+        #     wp.to_torch(self.simulator.wp_states[0].wp_x, requires_grad=False)
+        #     .cpu()
+        #     .numpy()
+        # )
+        # object_colors = self.object_colors.cpu().numpy()[0]
+        # if object_colors.shape[0] < vis_vertices.shape[0]:
+        #     # If the object_colors is not the same as object_points, fill the colors with black
+        #     object_colors = np.concatenate(
+        #         [
+        #             object_colors,
+        #             np.ones(
+        #                 (
+        #                     vis_vertices.shape[0] - object_colors.shape[0],
+        #                     3,
+        #                 )
+        #             )
+        #             * 0.3,
+        #         ],
+        #         axis=0,
+        #     )
+        # object_pcd = o3d.geometry.PointCloud()
+        # object_pcd.points = o3d.utility.Vector3dVector(vis_vertices)
+        # object_pcd.colors = o3d.utility.Vector3dVector(object_colors)
+        # vis.add_geometry(object_pcd)
+
+        # (optional) visualization of the controller points
+        vis_controller_points = self.simulator.controller_points[0].cpu().numpy()
+        # controller_meshes = []
+        # prev_center = []
+        # if vis_controller_points is not None:
+        #     # Use sphere mesh for each controller point
+        #     for j in range(vis_controller_points.shape[0]):
+        #         origin = vis_controller_points[j]
+        #         origin_color = [1, 0, 0]
+        #         controller_mesh = o3d.geometry.TriangleMesh.create_sphere(
+        #             radius=0.01
+        #         ).translate(origin)
+        #         controller_mesh.compute_vertex_normals()
+        #         controller_mesh.paint_uniform_color(origin_color)
+        #         controller_meshes.append(controller_mesh)
+        #         vis.add_geometry(controller_meshes[-1])
+        #         prev_center.append(origin)
+
+        prev_target = self.simulator.controller_points[0]
+        current_target = prev_target.clone()
+
+        ##### load temporary controller rollout trajectory #####
+        rollout_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/episode_0000/robot'
+        controller_xyzs = []
+        controller_rots = []
+        for i in range(len(os.listdir(rollout_dir))):
+            path = os.path.join(rollout_dir, f"{(i):06d}.txt")
+            with open(path, "r") as f:
+                lines = f.readlines()
+                controller_xyz = np.array(
+                    [float(x) for x in lines[0].strip().split(" ")], dtype=np.float32
+                )
+                controller_rot = np.array(
+                    [float(x) for x in lines[1].strip().split(" ")]
+                    + [float(x) for x in lines[2].strip().split(" ")]
+                    + [float(x) for x in lines[3].strip().split(" ")],
+                    dtype=np.float32,
+                ).reshape(3, 3)
+                controller_xyzs.append(controller_xyz)
+                controller_rots.append(controller_rot)
+        controller_xyzs = np.array(controller_xyzs)
+        controller_rots = np.array(controller_rots)
+
+        ##### Simple timer variables #####
+        current_index = 0
+        total_frames = len(controller_xyzs)
+        last_update_time = time.time()
+        update_interval_sec = 0.05  # Update every 100ms, adjust as needed
+
+
+        # start robot teleoperation and rendeering
+        while True:
+
+            self.simulator.set_controller_interactive(prev_target, current_target)
+            if self.simulator.object_collision_flag:
+                self.simulator.update_collision_graph()
+            wp.capture_launch(self.simulator.forward_graph)
+            x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
+            # Set the intial state for the next step
+            self.simulator.set_init_state(
+                self.simulator.wp_states[-1].wp_x,
+                self.simulator.wp_states[-1].wp_v,
+            )
+
+            frame = overlay.copy()
+
+            results = render_gaussian(view, gaussians, None, background)
+            rendering = results["render"]  # (4, H, W)
+            image = rendering.permute(1, 2, 0).detach().cpu().numpy()
+
+            image = image.clip(0, 1)
+            if use_white_background:
+                image_mask = np.logical_and(
+                    (image != 1.0).any(axis=2), image[:, :, 3] > 100 / 255
+                )
+            else:
+                image_mask = np.logical_and(
+                    (image != 0.0).any(axis=2), image[:, :, 3] > 100 / 255
+                )
+            image[~image_mask, 3] = 0
+
+            alpha = image[..., 3:4]
+            rgb = image[..., :3] * 255
+            frame = alpha * rgb + (1 - alpha) * frame
+            frame = frame.astype(np.uint8)
+            
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            cv2.imshow("Interactive Playground", frame)
+            cv2.waitKey(1)
+
+            if prev_x is not None:
+                
+                prev_particle_pos = prev_x
+                cur_particle_pos = x
+
+                # relations and weights only computed in the first iteration
+                if relations is None:
+                    relations = get_topk_indices(prev_x, K=16)
+                if weights is None:
+                    weights, weights_indices = knn_weights_sparse(prev_particle_pos, current_pos, K=16)
+
+                with torch.no_grad():
+
+                    weights = calc_weights_vals_from_indices(prev_particle_pos, current_pos, weights_indices)
+
+                    current_pos, current_rot, _ = interpolate_motions_feng_speedup(
+                        bones=prev_particle_pos,
+                        motions=cur_particle_pos - prev_particle_pos,
+                        relations=relations,
+                        weights=weights,
+                        weights_indices=weights_indices,
+                        xyz=current_pos,
+                        quat=current_rot,
+                    )
+
+                    # update gaussians with the new positions and rotations
+                    gaussians._xyz = current_pos
+                    gaussians._rotation = current_rot
+
+            prev_x = x.clone()
+
+            # update the target controller points
+            # prev_target = current_target
+            # cur_controller_xyz = None   # TODO: input this part
+            # cur_controller_rot = None
+            # current_target = torch.cat(
+            #     list(
+            #         torch.einsum("gij,nj->gni", cur_controller_rot, ctrl_pts_pos) 
+            #         + cur_controller_xyz
+            #     ), 
+            #     dim=0
+            # )
+
+            ##### temporary controller rollout trajectory #####
+            current_time = time.time()
+    
+            if current_time - last_update_time >= update_interval_sec:
+                cur_controller_xyz = torch.tensor(controller_xyzs[current_index], dtype=torch.float32).unsqueeze(0).to("cuda")  # shape (1, 3)
+                cur_controller_rot = torch.tensor(controller_rots[current_index], dtype=torch.float32).unsqueeze(0).to("cuda")  # shape (1, 3, 3)
+                prev_target = current_target
+                current_target = torch.cat(
+                    list(
+                        torch.einsum("gij,nj->gni", cur_controller_rot, ctrl_pts_pos) 
+                        + cur_controller_xyz
+                    ), 
+                    dim=0
+                )
+                current_index += 1
+                if current_index > total_frames:
+                    break
+                last_update_time = current_time
+                image_path = f"{cfg.episode_path}/camera_{vis_cam_idx}/rgb/{current_index:06d}.jpg"
+                overlay = cv2.imread(image_path)
+                overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+
+
+
 
     def load_model_transfer(
         self, model_path, init_controller_points, final_points, action_num, dt=5e-5
@@ -1541,7 +1902,142 @@ class InvPhyTrainerWarp:
         cfg.num_substeps = round(1.0 / cfg.FPS / cfg.dt)
         cfg.collision_dist = 0.005
 
-        self.simulator = SpringMassSystemWarpAccelerate(   # TODO: change to non-accelerate version
+        self.simulator = SpringMassSystemWarpAccelerate(
+            self.init_vertices,
+            self.init_springs,
+            self.init_rest_lengths,
+            self.init_masses,
+            dt=cfg.dt,
+            num_substeps=cfg.num_substeps,
+            spring_Y=cfg.init_spring_Y,
+            collide_elas=cfg.collide_elas,
+            collide_fric=cfg.collide_fric,
+            dashpot_damping=cfg.dashpot_damping,
+            drag_damping=cfg.drag_damping,
+            collide_object_elas=cfg.collide_object_elas,
+            collide_object_fric=cfg.collide_object_fric,
+            init_masks=self.init_masks,
+            collision_dist=cfg.collision_dist,
+            init_velocities=self.init_velocities,
+            num_object_points=self.num_all_points,
+            num_surface_points=self.num_surface_points,
+            num_original_points=self.num_original_points,
+            controller_points=self.controller_points,
+            reverse_z=cfg.reverse_z,
+            spring_Y_min=cfg.spring_Y_min,
+            spring_Y_max=cfg.spring_Y_max,
+            gt_object_points=self.object_points,
+            gt_object_visibilities=self.object_visibilities,
+            gt_object_motions_valid=self.object_motions_valid,
+            self_collision=cfg.self_collision,
+        )
+
+        spring_Y = torch.cat(
+            [
+                spring_Y,
+                3e4
+                * torch.ones(
+                    self.simulator.n_springs - self.num_object_springs,
+                    dtype=torch.float32,
+                    device=cfg.device,
+                ),
+            ]
+        )
+
+        self.simulator.set_spring_Y(torch.log(spring_Y).detach().clone())
+        self.simulator.set_collide(
+            collide_elas.detach().clone(), collide_fric.detach().clone()
+        )
+        self.simulator.set_collide_object(
+            collide_object_elas.detach().clone(), collide_object_fric.detach().clone()
+        )
+
+    def load_model_transfer_no_acc(
+        self, model_path, init_controller_points, final_points, action_num, dt=5e-5
+    ):
+        # Load the model
+        logger.info(f"Load model from {model_path}")
+        checkpoint = torch.load(model_path, map_location=cfg.device)
+
+        spring_Y = checkpoint["spring_Y"]
+        collide_elas = checkpoint["collide_elas"]
+        collide_fric = checkpoint["collide_fric"]
+        collide_object_elas = checkpoint["collide_object_elas"]
+        collide_object_fric = checkpoint["collide_object_fric"]
+        num_object_springs = checkpoint["num_object_springs"]
+
+        spring_Y = spring_Y[: self.num_object_springs]
+
+        self.init_controller_points = init_controller_points.contiguous()
+
+        # Reconnect the springs between the controller points and the object points
+        controller_points = self.init_controller_points.cpu().numpy()
+        springs = self.init_springs.cpu().numpy()[: self.num_object_springs]
+
+        rest_lengths = np.linalg.norm(
+            final_points[springs[:, 0]] - final_points[springs[:, 1]], axis=1
+        )
+
+        springs = springs.tolist()
+        rest_lengths = rest_lengths.tolist()
+        # Update the connection between the final points and the controller points
+        first_frame_controller_points = controller_points
+        points = np.concatenate([final_points, first_frame_controller_points], axis=0)
+        object_pcd = o3d.geometry.PointCloud()
+        object_pcd.points = o3d.utility.Vector3dVector(final_points)
+        pcd_tree = o3d.geometry.KDTreeFlann(object_pcd)
+
+        # Process to get the connection distance among the controller points and object points
+        # Locate the nearest object point for each controller point
+        kdtree = KDTree(final_points)
+        _, idx = kdtree.query(first_frame_controller_points, k=1)
+        # find the distances
+        distances = np.linalg.norm(
+            final_points[idx] - first_frame_controller_points, axis=1
+        )
+        # find the indices of the top 4 controller points that are close
+        controller_radius = np.ones(first_frame_controller_points.shape[0]) * 0.01
+        controller_radius = distances + 0.005
+
+        for i in range(len(first_frame_controller_points)):
+            [k, idx, _] = pcd_tree.search_hybrid_vector_3d(
+                first_frame_controller_points[i],
+                controller_radius[i],
+                30,
+            )
+            for j in idx:
+                springs.append([self.num_all_points + i, j])
+                rest_lengths.append(
+                    np.linalg.norm(first_frame_controller_points[i] - points[j])
+                )
+
+        self.init_springs = torch.tensor(
+            np.array(springs), dtype=torch.int32, device=cfg.device
+        )
+
+        self.init_rest_lengths = torch.tensor(
+            np.array(rest_lengths), dtype=torch.float32, device=cfg.device
+        )
+        self.init_masses = torch.tensor(
+            np.ones(len(points)), dtype=torch.float32, device=cfg.device
+        )
+
+        self.init_vertices = torch.tensor(
+            points,
+            dtype=torch.float32,
+            device=cfg.device,
+        )
+        self.controller_points = torch.tensor(
+            [controller_points] * action_num,
+            dtype=torch.float32,
+            device=cfg.device,
+        )
+
+        cfg.dt = dt
+        cfg.num_substeps = round(1.0 / cfg.FPS / cfg.dt)
+        cfg.collision_dist = 0.005
+
+        self.simulator = SpringMassSystemWarp(
             self.init_vertices,
             self.init_springs,
             self.init_rest_lengths,
