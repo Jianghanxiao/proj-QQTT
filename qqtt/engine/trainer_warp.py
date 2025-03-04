@@ -27,6 +27,7 @@ from gaussian_splatting.rotation_utils import quaternion_multiply, matrix_to_qua
 from sklearn.cluster import KMeans
 import copy
 import time
+import threading
 
 
 class InvPhyTrainerWarp:
@@ -1574,6 +1575,36 @@ class InvPhyTrainerWarp:
                 K=K, normal=None, depth=None, occ_mask=None)
         return view
 
+    @staticmethod
+    def controller_update_thread(data_manager, controller_xyzs, controller_rots, image_dir=None):
+        """
+        Thread function that updates controller pose using pre-recorded data.
+        """
+        num_frames = len(controller_xyzs)
+        
+        for i in range(num_frames):
+
+            xyz = controller_xyzs[i]
+            rot = controller_rots[i]
+
+            image = None
+            if image_dir is not None:
+                image_path = os.path.join(image_dir, f"{i:06d}.jpg")
+                if os.path.exists(image_path):
+                    image = cv2.imread(image_path)
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+            data_manager.update_controller_pose(xyz, rot, image)
+            
+            # Sleep to simulate real-time data generation
+            time.sleep(0.05)  # 20Hz update rate
+            
+            if data_manager.done:
+                break
+                
+        data_manager.set_done()
+        print("Controller update thread finished")
+
     def interactive_robot_teleop(self, gs_path, align_trans=None, align_transform=None, ctrl_pts_pos=None):
 
         logger.info("Robot Teleoperation Start!!!!")
@@ -1701,21 +1732,24 @@ class InvPhyTrainerWarp:
         controller_xyzs = np.array(controller_xyzs)
         controller_rots = np.array(controller_rots)
 
-        ##### Simple timer variables #####
-        current_index = 0
-        total_frames = len(controller_xyzs)
-        last_update_time = time.time()
-        update_interval_sec = 0.05  # Update every 100ms, adjust as needed
-
+        image_dir = f"{cfg.episode_path}/camera_{vis_cam_idx}/rgb/"
+        data_manager = ControllerDataManager()
+        controller_thread = threading.Thread(
+            target=self.controller_update_thread, 
+            args=(data_manager, controller_xyzs, controller_rots, image_dir),
+            daemon=True  # ensure thread exits when main program exits
+        )
+        controller_thread.start()
 
         # start robot teleoperation and rendeering
-        while True:
+        while not data_manager.done:
 
             self.simulator.set_controller_interactive(prev_target, current_target)
             if self.simulator.object_collision_flag:
                 self.simulator.update_collision_graph()
             wp.capture_launch(self.simulator.forward_graph)
             x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
+
             # Set the intial state for the next step
             self.simulator.set_init_state(
                 self.simulator.wp_states[-1].wp_x,
@@ -1780,25 +1814,15 @@ class InvPhyTrainerWarp:
 
             prev_x = x.clone()
 
-            # update the target controller points
-            # prev_target = current_target
-            # cur_controller_xyz = None   # TODO: input this part
-            # cur_controller_rot = None
-            # current_target = torch.cat(
-            #     list(
-            #         torch.einsum("gij,nj->gni", cur_controller_rot, ctrl_pts_pos) 
-            #         + cur_controller_xyz
-            #     ), 
-            #     dim=0
-            # )
+            controller_xyz, controller_rot, new_overlay = data_manager.get_current_controller_data()
 
-            ##### temporary controller rollout trajectory #####
-            current_time = time.time()
-    
-            if current_time - last_update_time >= update_interval_sec:
-                cur_controller_xyz = torch.tensor(controller_xyzs[current_index], dtype=torch.float32).unsqueeze(0).to("cuda")  # shape (1, 3)
-                cur_controller_rot = torch.tensor(controller_rots[current_index], dtype=torch.float32).unsqueeze(0).to("cuda")  # shape (1, 3, 3)
+            if controller_xyz is not None and controller_rot is not None:
+
                 prev_target = current_target
+            
+                cur_controller_xyz = torch.tensor(controller_xyz, dtype=torch.float32).unsqueeze(0).to("cuda")
+                cur_controller_rot = torch.tensor(controller_rot, dtype=torch.float32).unsqueeze(0).to("cuda")
+                
                 current_target = torch.cat(
                     list(
                         torch.einsum("gij,nj->gni", cur_controller_rot, ctrl_pts_pos) 
@@ -1806,15 +1830,9 @@ class InvPhyTrainerWarp:
                     ), 
                     dim=0
                 )
-                current_index += 1
-                if current_index > total_frames:
-                    break
-                last_update_time = current_time
-                image_path = f"{cfg.episode_path}/camera_{vis_cam_idx}/rgb/{current_index:06d}.jpg"
-                overlay = cv2.imread(image_path)
-                overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
 
-
+                if new_overlay is not None:
+                    overlay = new_overlay
 
 
     def load_model_transfer(
@@ -2195,3 +2213,30 @@ class InvPhyTrainerWarp:
 
         x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
         return x
+
+
+class ControllerDataManager:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.controller_xyz = None
+        self.controller_rot = None
+        self.image = None
+        self.new_data_event = threading.Event()
+        self.done = False
+    
+    def update_controller_pose(self, xyz, rot, image=None):
+        with self.lock:
+            self.controller_xyz = xyz
+            self.controller_rot = rot
+            if image is not None:
+                self.image = image
+            self.new_data_event.set()
+    
+    def get_current_controller_data(self):
+        with self.lock:
+            return self.controller_xyz, self.controller_rot, self.image
+    
+    def set_done(self):
+        with self.lock:
+            self.done = True
+            self.new_data_event.set()  # Wake up any waiting threads
