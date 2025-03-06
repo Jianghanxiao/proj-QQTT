@@ -12,7 +12,7 @@ from pytorch3d.loss import chamfer_distance
 # prediction_dir = (
 #     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments"
 # )
-prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/gnn_test/different_types/output"
+prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/GNN_original/different_types_gnn"
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
 output_file = "results/final_results_gnn_indomain.csv"
 
@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
     dir_names = glob.glob(f"{prediction_dir}/*")
     for dir_name in dir_names:
-        case_name = dir_name.split("/")[-1]
+        case_name = dir_name.split("/")[-1].split("-")[1]
         print(f"Processing {case_name}")
 
         # Read the trajectory data

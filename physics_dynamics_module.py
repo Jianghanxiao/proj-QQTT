@@ -121,7 +121,7 @@ class PhysDynamicModule:
             torch.einsum(
                 "gij,nj->gni", init_controller_rot, self.controller_points_position
             )
-            + init_controller_xyz
+            + init_controller_xyz[:, None]
         )
         self.init_controller_points = torch.cat(
             list(self.init_controller_points), dim=0

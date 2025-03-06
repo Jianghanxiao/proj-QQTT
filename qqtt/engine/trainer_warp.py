@@ -1116,5 +1116,5 @@ class InvPhyTrainerWarp:
                 vis.poll_events()
                 vis.update_renderer()
 
-        x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False)
+        x = wp.to_torch(self.simulator.wp_states[-1].wp_x, requires_grad=False).clone()
         return x

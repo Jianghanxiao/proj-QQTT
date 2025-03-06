@@ -8,7 +8,7 @@ from scipy.spatial import KDTree
 from pytorch3d.loss import chamfer_distance
 
 prediction_dir = (
-    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments_out_domain"
+    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/GNN_original/outdomain"
 )
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
 output_file = "results/final_outdomain_results.csv"
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         exp_name = f"{from_case}_to_{to_case}"
 
         # Read the trajectory data
-        with open(f"{prediction_dir}/{exp_name}/inference.pkl", "rb") as f:
+        with open(f"{prediction_dir}/render-{exp_name}-model_50/inference.pkl", "rb") as f:
             vertices = pickle.load(f)
 
         # Read the GT object points and masks

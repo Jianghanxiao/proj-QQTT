@@ -7,13 +7,13 @@ import numpy as np
 from pytorch3d.loss import chamfer_distance
 
 prediction_dir = (
-    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/GNN_rope_variants_deprecated"
+    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/GNN/rope_variants"
 )
 # prediction_dir = (
 #     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments"
 # )
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
-output_file = "results/deprecated_gnn_rope_variants.csv"
+output_file = "results/final_gnn_rope_variants.csv"
 original_case_name = "rope_double_hand"
 
 def evaluate_prediction(
@@ -98,13 +98,11 @@ if __name__ == "__main__":
         print(f"Processing {case_name}")
 
         # Read the trajectory data
-        with open(f"{dir_name}/{case_name}.pkl", "rb") as f:
+        with open(f"{dir_name}/rope_0/inference.pkl", "rb") as f:
             vertices = pickle.load(f)
 
         # Read the GT object points and masks
-        # with open(f"{base_path}/{original_case_name}/final_data.pkl", "rb") as f:
-        #     data = pickle.load(f)
-        with open(f"/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/old_rope_0.pkl", "rb") as f:
+        with open(f"{base_path}/{original_case_name}/final_data.pkl", "rb") as f:
             data = pickle.load(f)
 
         object_points = data["object_points"]

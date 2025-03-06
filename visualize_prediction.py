@@ -9,7 +9,8 @@ from qqtt.utils import visualize_pc, cfg
 # prediction_dir = (
 #     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments_transfer"
 # )
-prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/gnn_test/different_types/output"
+# prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/gnn_test/different_types/output"
+prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/GNN/different_types_gnn"
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
 
 dir_names = glob.glob(f"{prediction_dir}/*")
