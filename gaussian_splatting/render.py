@@ -207,7 +207,8 @@ def remove_gaussians_with_point_mesh_distance(gaussians, mesh_sampled_points, di
     mask3d = (dists_bq[1].squeeze(0) != -1).squeeze(-1)
     print(f"Removing {len(mask3d) - mask3d.sum()} gaussians with distance < {dist_threshold}")
 
-    new_gaussians = copy.deepcopy(gaussians)
+    # new_gaussians = copy.deepcopy(gaussians)
+    new_gaussians = copy.copy(gaussians)
     new_gaussians._xyz = gaussians._xyz[mask3d]
     new_gaussians._features_dc = gaussians._features_dc[mask3d]
     new_gaussians._features_rest = gaussians._features_rest[mask3d]

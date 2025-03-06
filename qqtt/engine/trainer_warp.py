@@ -21,7 +21,7 @@ from gaussian_splatting.scene.cameras import Camera
 from gaussian_splatting.gaussian_renderer import render as render_gaussian
 from gaussian_splatting.dynamic_utils import interpolate_motions_feng, interpolate_motions_feng_speedup, knn_weights, knn_weights_sparse, get_topk_indices, calc_weights_vals_from_indices
 from gaussian_splatting.utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
-from gaussian_splatting.render import remove_gaussians_with_low_opacity
+from gaussian_splatting.render import remove_gaussians_with_low_opacity, remove_gaussians_with_point_mesh_distance
 from gaussian_splatting.rotation_utils import quaternion_multiply, matrix_to_quaternion
 
 from sklearn.cluster import KMeans
@@ -1047,7 +1047,7 @@ class InvPhyTrainerWarp:
         min_idx = min_indices[torch.argmin(min_dist_per_ctrl_pts)]
         return self.structure_points[min_idx].unsqueeze(0)
 
-    def interactive_playground(self, model_path, gs_path, n_ctrl_parts=1, inv_ctrl=False):
+    def interactive_playground(self, model_path, gs_path, n_ctrl_parts=1, inv_ctrl=False, remove_gs_from_mesh=False, remove_dist_th=0.01):
         # Load the model
         logger.info(f"Load model from {model_path}")
         checkpoint = torch.load(model_path, map_location=cfg.device)
@@ -1102,6 +1102,21 @@ class InvPhyTrainerWarp:
         gaussians = GaussianModel(sh_degree=3)
         gaussians.load_ply(gs_path)
         gaussians = remove_gaussians_with_low_opacity(gaussians, 0.1)
+        if remove_gs_from_mesh:
+            N_SAMPLES = 100_000
+            DIST_THRESHOLD = remove_dist_th
+            if os.path.exists(cfg.mesh_path):
+                print(f"Sampling {N_SAMPLES} points from mesh")
+                mesh = o3d.io.read_triangle_mesh(cfg.mesh_path)
+                sampled_points = np.asarray(mesh.sample_points_uniformly(number_of_points=N_SAMPLES).points)
+            elif os.path.exists(cfg.pcd_path):
+                print(f"Sampled {N_SAMPLES} points from point cloud observation")
+                pcd = o3d.io.read_point_cloud(cfg.pcd_path)
+                xyz = np.asarray(pcd.points)
+                num_points = min(xyz.shape[0], N_SAMPLES)
+                sampled_points = xyz[np.random.choice(xyz.shape[0], num_points, replace=False)]
+            mesh_sampled_points = torch.tensor(sampled_points, dtype=torch.float32, device="cuda")
+            gaussians = remove_gaussians_with_point_mesh_distance(gaussians, mesh_sampled_points, DIST_THRESHOLD)
         gaussians.isotropic = True
         current_pos = gaussians.get_xyz
         current_rot = gaussians.get_rotation
@@ -1634,7 +1649,7 @@ class InvPhyTrainerWarp:
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
         # pick one view to render
-        vis_cam_idx = 2   # 1, 2 has human involved
+        vis_cam_idx = 1   # 1, 2 has human involved
         FPS = cfg.FPS
         width, height = cfg.WH
         intrinsic = cfg.intrinsics[vis_cam_idx]
@@ -1711,7 +1726,7 @@ class InvPhyTrainerWarp:
         current_target = prev_target.clone()
 
         ##### load temporary controller rollout trajectory #####
-        rollout_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/episode_0000/robot'
+        rollout_dir = os.path.join(cfg.episode_path, "robot")
         controller_xyzs = []
         controller_rots = []
         for i in range(len(os.listdir(rollout_dir))):
@@ -1740,6 +1755,8 @@ class InvPhyTrainerWarp:
             daemon=True  # ensure thread exits when main program exits
         )
         controller_thread.start()
+
+        frames = []  # TODO: store frames for video demo
 
         # start robot teleoperation and rendeering
         while not data_manager.done:
@@ -1782,6 +1799,8 @@ class InvPhyTrainerWarp:
 
             cv2.imshow("Interactive Playground", frame)
             cv2.waitKey(1)
+
+            frames.append(frame)  # TODO: store frames for video demo
 
             if prev_x is not None:
                 
@@ -1833,6 +1852,13 @@ class InvPhyTrainerWarp:
 
                 if new_overlay is not None:
                     overlay = new_overlay
+
+        # TODO: save the frame for video demo
+        episode_name = cfg.episode_path.split("/")[-1]
+        tmp_dir = f'./_tmp_teleop_frames/{episode_name}'
+        os.makedirs(tmp_dir, exist_ok=True)
+        for i, frame in enumerate(frames):
+            cv2.imwrite(os.path.join(tmp_dir, f"frame_{i:06d}.png"), frame)
 
 
     def load_model_transfer(

@@ -37,6 +37,8 @@ if __name__ == "__main__":
     parser.add_argument("--case_name", type=str, default="single_lift_rope")
     parser.add_argument("--n_ctrl_parts", type=int, default=1)
     parser.add_argument("--inv_ctrl", action="store_true", help="invert horizontal control direction")
+    parser.add_argument("--remove_gs_from_mesh", action="store_true", help="remove gaussians that are far from mesh")
+    parser.add_argument("--remove_dist_th", type=float, default=0.01, help="distance threshold for removing gaussians")
     args = parser.parse_args()
 
     base_path = args.base_path
@@ -83,7 +85,9 @@ if __name__ == "__main__":
     exp_name = 'init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0'
     gaussians_path = f"/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/gaussian_splatting/output/{case_name}/{exp_name}/point_cloud/iteration_10000/point_cloud.ply"
 
-    cfg.mask_path = f"{base_path}/{case_name}/mask"
+    cfg.mask_path = f"{base_path}/{case_name}/"
+    cfg.mesh_path = f"{base_path}/{case_name}/shape_prior.glb"
+    cfg.pcd_path = f"{base_path}/{case_name}/observation.ply"
 
     logger.set_log_file(path=base_dir, name="inference_log")
     trainer = InvPhyTrainerWarp(
@@ -93,7 +97,7 @@ if __name__ == "__main__":
     )
 
     best_model_path = glob.glob(f"experiments/{case_name}/train/best_*.pth")[0]
-    trainer.interactive_playground(best_model_path, gaussians_path, args.n_ctrl_parts, args.inv_ctrl)
+    trainer.interactive_playground(best_model_path, gaussians_path, args.n_ctrl_parts, args.inv_ctrl, args.remove_gs_from_mesh, args.remove_dist_th)
 
 
     # TODO: installation commands

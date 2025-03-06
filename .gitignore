@@ -39,6 +39,9 @@ temp_experiments/
 MPC/
 robot_data/
 episode_0000/
+episode_0001/
+episode_0000_old/
+_tmp_teleop_frames/
 
 
 # Byte-compiled / optimized / DLL files

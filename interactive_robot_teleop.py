@@ -54,6 +54,7 @@ class PhysDynamicModule:
         init_controller_xyz,
         init_controller_rot,
         action_num,
+        episode_name,
         device="cuda",
     ):
         # set the random seed, so that the results are reproducible
@@ -88,7 +89,7 @@ class PhysDynamicModule:
         # cfg.intrinsics = np.array(data["intrinsics"])
         # cfg.WH = data["WH"]
 
-        cfg.episode_path = f"/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/episode_0000"
+        cfg.episode_path = f"/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/{episode_name}"
         calibration_dir = f"{cfg.episode_path}/calibration/"
         h, w = 480, 848
         intr = np.load(calibration_dir + 'intrinsics.npy')
@@ -209,80 +210,107 @@ class PhysDynamicModule:
         return final_points, align_translation, align_p2p_transform
     
     
-    # def visualize_point_clouds(self, geometries, window_names=None):
-    #     """
-    #     Visualize multiple point clouds with custom names.
+    def visualize_point_clouds(self, geometries, window_names=None):
+        """
+        Visualize multiple point clouds with custom names.
         
-    #     Args:
-    #         geometries: List of point cloud geometries
-    #         window_names: List of names for each point cloud
-    #     """
-    #     if window_names is None:
-    #         window_names = [f"Point Cloud {i}" for i in range(len(geometries))]
+        Args:
+            geometries: List of point cloud geometries
+            window_names: List of names for each point cloud
+        """
+        if window_names is None:
+            window_names = [f"Point Cloud {i}" for i in range(len(geometries))]
         
-    #     # Visualize combined view
-    #     vis = o3d.visualization.Visualizer()
-    #     vis.create_window(window_name="Combined Point Clouds")
+        # Visualize combined view
+        vis = o3d.visualization.Visualizer()
+        vis.create_window(window_name="Combined Point Clouds")
         
-    #     # Assign different colors to differentiate between point clouds
-    #     colors = [[1, 0.706, 0], [0, 0.651, 0.929]]  # Orange for source, blue for target
+        # Assign different colors to differentiate between point clouds
+        colors = [[1, 0.706, 0], [0, 0.651, 0.929]]  # Orange for source, blue for target
         
-    #     for i, (geom, name) in enumerate(zip(geometries, window_names)):
-    #         # Use the geometry directly as we're only adding it to the visualizer
-    #         geom_copy = geom
+        for i, (geom, name) in enumerate(zip(geometries, window_names)):
+            # Use the geometry directly as we're only adding it to the visualizer
+            geom_copy = geom
             
-    #         # Add to combined visualizer
-    #         vis.add_geometry(geom_copy)
+            # Add to combined visualizer
+            vis.add_geometry(geom_copy)
         
-    #     # Set viewing options and run the visualizer
-    #     opt = vis.get_render_option()
-    #     opt.background_color = np.asarray([0.1, 0.1, 0.1])  # Dark gray background
-    #     opt.point_size = 2.0
+        # Set viewing options and run the visualizer
+        opt = vis.get_render_option()
+        opt.background_color = np.asarray([0.1, 0.1, 0.1])  # Dark gray background
+        opt.point_size = 2.0
         
-    #     vis.run()
-    #     vis.destroy_window()
+        vis.run()
+        vis.destroy_window()
 
 
 if __name__ == "__main__":
 
-    init_pcd_path = "/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/episode_0000/pcd_clean_new/000000.npz"
+    episode_name = "episode_0001"
+
+    init_pcd_path = f"/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/{episode_name}/pcd_clean_new/000000.npz"
     init_pcd = np.load(init_pcd_path)
     init_pts = init_pcd["pts"]
     init_colors = init_pcd["colors"]
 
-    init_controller_xyz = np.array(
-        [
-            [
-                3.044547887605847380e-01,
-                2.841108186878805730e-01,
-                -1.315379715678757083e-02,
-            ]
-        ]
-    )
-    init_controller_rot = np.array(
-        [
-            [
-                [
-                    -6.480154314145059047e-02,
-                    9.962636060017686646e-01,
-                    -5.709279606780431893e-02,
-                ],
-                [
-                    -9.961174236442396079e-01,
-                    -6.799639288895997780e-02,
-                    -5.591573004489115012e-02,
-                ],
-                [
-                    -5.958891103930036293e-02,
-                    5.324770333491749691e-02,
-                    9.968018076682580997e-01,
-                ],
-            ]
-        ]
-    )
+    # init_controller_xyz = np.array(
+    #     [
+    #         [
+    #             3.044547887605847380e-01,
+    #             2.841108186878805730e-01,
+    #             -1.315379715678757083e-02,
+    #         ]
+    #     ]
+    # )
+    # init_controller_rot = np.array(
+    #     [
+    #         [
+    #             [
+    #                 -6.480154314145059047e-02,
+    #                 9.962636060017686646e-01,
+    #                 -5.709279606780431893e-02,
+    #             ],
+    #             [
+    #                 -9.961174236442396079e-01,
+    #                 -6.799639288895997780e-02,
+    #                 -5.591573004489115012e-02,
+    #             ],
+    #             [
+    #                 -5.958891103930036293e-02,
+    #                 5.324770333491749691e-02,
+    #                 9.968018076682580997e-01,
+    #             ],
+    #         ]
+    #     ]
+    # )
+
+    rollout_dir = os.path.join("/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT", episode_name, "robot")
+    controller_xyzs = []
+    controller_rots = []
+    for i in range(len(os.listdir(rollout_dir))):
+        path = os.path.join(rollout_dir, f"{(i):06d}.txt")
+        with open(path, "r") as f:
+            lines = f.readlines()
+            controller_xyz = np.array(
+                [float(x) for x in lines[0].strip().split(" ")], dtype=np.float32
+            )
+            controller_rot = np.array(
+                [float(x) for x in lines[1].strip().split(" ")]
+                + [float(x) for x in lines[2].strip().split(" ")]
+                + [float(x) for x in lines[3].strip().split(" ")],
+                dtype=np.float32,
+            ).reshape(3, 3)
+            controller_xyzs.append(controller_xyz)
+            controller_rots.append(controller_rot)
+    controller_xyzs = np.array(controller_xyzs)
+    controller_rots = np.array(controller_rots)
+
+    init_controller_xyz = controller_xyzs[0].reshape(1, 3)
+    init_controller_rot = controller_rots[0].reshape(1, 3, 3)
+    action_num = controller_xyzs.shape[0]
 
     action_num = 143
-    case_name = "single_lift_rope"
+    case_name = "single_push_rope"
 
     dynamic_module = PhysDynamicModule(
         base_path="/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian_data",
@@ -295,29 +323,9 @@ if __name__ == "__main__":
         init_controller_xyz=init_controller_xyz,
         init_controller_rot=init_controller_rot,
         action_num=action_num,
+        episode_name=episode_name,
         device="cuda",
     )
-
-    # controller_xyzs = []
-    # controller_rots = []
-    # for i in range(142):
-    #     path = f"/home/hanxiao/Downloads/episode_0000/robot/{(i+1):06d}.txt"
-    #     with open(path, "r") as f:
-    #         lines = f.readlines()
-    #         controller_xyz = np.array(
-    #             [float(x) for x in lines[0].strip().split(" ")], dtype=np.float32
-    #         )
-    #         controller_rot = np.array(
-    #             [float(x) for x in lines[1].strip().split(" ")]
-    #             + [float(x) for x in lines[2].strip().split(" ")]
-    #             + [float(x) for x in lines[3].strip().split(" ")],
-    #             dtype=np.float32,
-    #         ).reshape(3, 3)
-    #         controller_xyzs.append(controller_xyz)
-    #         controller_rots.append(controller_rot)
-
-    # controller_xyzs = np.array(controller_xyzs)
-    # controller_rots = np.array(controller_rots)
 
     print("Finish initialization!!!!!!!!!!!!!!!!!!!!")
 
@@ -330,5 +338,5 @@ if __name__ == "__main__":
         gaussians_path,
         dynamic_module.align_translation,
         dynamic_module.align_p2p_transform,
-        dynamic_module.controller_points_position
+        dynamic_module.controller_points_position,
     )
