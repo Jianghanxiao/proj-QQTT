@@ -10,13 +10,16 @@ from qqtt.utils import visualize_pc, cfg
 #     "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments_transfer"
 # )
 # prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/gnn_test/different_types/output"
-prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/GNN/different_types_gnn"
+# prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/GNN/different_types_gnn"
+prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/experiments"
 base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
 
 dir_names = glob.glob(f"{prediction_dir}/*")
 for dir_name in dir_names:
-    case_name = dir_name.split("/")[-1].split("-")[1]
+    case_name = dir_name.split("/")[-1]
     print(f"Processing {case_name}")
+    # if case_name != "double_stretch_sloth":
+    #     continue
 
     # Read the trajectory data
     with open(f"{dir_name}/inference.pkl", "rb") as f:
