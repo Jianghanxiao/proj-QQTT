@@ -24,7 +24,7 @@ def set_all_seeds(seed):
 seed = 42
 set_all_seeds(seed)
 
-background_image = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data_collect/20250227_143503/color/0/204.png"
+background_image = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/bg/color/0/204.png"
 
 if __name__ == "__main__":
     parser = ArgumentParser()
