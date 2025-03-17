@@ -14,6 +14,9 @@ import time
 import torch.multiprocessing as mp
 import warp as wp
 
+BASE_PATH = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
+EXAMPLE_ROLLOUT_DIR = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/robot_data/example_rollout/episode_0000"
+
 
 def set_all_seeds(seed):
     random.seed(seed)
@@ -89,15 +92,7 @@ class PhysDynamicModule:
         cfg.intrinsics = np.array(data["intrinsics"])
         cfg.WH = data["WH"]
 
-        logger.set_log_file(path=base_dir, name="inference_log")
-        # self.trainers = []
-        # for i in range(self.batch_size):
-        #     trainer = InvPhyTrainerWarp(
-        #         data_path=f"{base_path}/{case_name}/final_data.pkl",
-        #         base_dir=base_dir,
-        #         pure_inference_mode=True,
-        #     )
-        #     self.trainers.append(trainer)
+        logger
         self.trainer = InvPhyTrainerWarp(
             data_path=f"{base_path}/{case_name}/final_data.pkl",
             base_dir=base_dir,
@@ -138,13 +133,6 @@ class PhysDynamicModule:
         best_model_path = glob.glob(f"{experiments_path}/{case_name}/train/best_*.pth")[
             0
         ]
-        # for i in range(self.batch_size):
-        #     self.trainers[i].load_model_transfer(
-        #         best_model_path,
-        #         self.init_controller_points.clone(),
-        #         final_points.copy(),
-        #         dt=5e-5,
-        #     )
         self.trainer.load_model_transfer(
             best_model_path,
             self.init_controller_points.clone(),
@@ -224,63 +212,8 @@ class PhysDynamicModule:
         # all_pts = torch.stack(all_pts, dim=0)
         return all_pts
 
-
-#     def rollout_parallel(self, eef_xyz, eef_rot, visualize=False):
-#         result_queue = mp.Queue()
-
-#         batch_size = eef_xyz.shape[0]
-#         assert batch_size == self.batch_size
-#         eef_xyz = torch.tensor(eef_xyz, dtype=torch.float, device=self.device)
-#         eef_rot = torch.tensor(eef_rot, dtype=torch.float, device=self.device)
-
-#         processes = []
-#         for i in range(batch_size):
-#             # 使用torch.multiprocessing.Process创建进程
-#             p = mp.Process(
-#                 target=rollout_worker,
-#                 args=(
-#                     i,
-#                     eef_xyz[i],
-#                     eef_rot[i],
-#                     self.controller_points_position,
-#                     result_queue,
-#                     self.trainers[i],
-#                 ),
-#             )
-#             processes.append(p)
-#             p.start()
-
-#         results = {}
-#         for p in processes:
-#             p.join()
-
-#         while not result_queue.empty():
-#             i, pts = result_queue.get()  # 获取每个子进程的结果
-#             results[i] = pts
-
-#         return results
-
-
-# def rollout_worker(
-#     i, eef_xyz, eef_rot, controller_points_position, trainer, result_queue
-# ):
-#     print(eef_rot.shape)
-#     print(controller_points_position.shape)
-#     controller_points_array = torch.einsum(
-#         "bij,nj->bni",
-#         eef_rot,  # shape: (batch_size, 3, 3)
-#         controller_points_position,  # shape: (8, 3)
-#     )
-#     controller_points_array = controller_points_array + eef_xyz[:, None, :]
-#     controller_points_array = torch.tensor(
-#         controller_points_array, dtype=torch.float, device="cuda"
-#     )
-#     pts = trainer.rollout(controller_points_array, visualize=False)
-#     result_queue.put((i, pts))
-
-
 if __name__ == "__main__":
-    init_pcd_path = "/home/hanxiao/Downloads/episode_0000/pcd_clean_new/000000.npz"
+    init_pcd_path = f"{EXAMPLE_ROLLOUT_DIR}/pcd_clean_new/000000.npz"
     init_pcd = np.load(init_pcd_path)
     init_pts = init_pcd["pts"]
     init_colors = init_pcd["colors"]
@@ -320,7 +253,7 @@ if __name__ == "__main__":
     action_num = 143
 
     dynamic_module = PhysDynamicModule(
-        base_path="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types",
+        base_path=BASE_PATH,
         case_name="single_lift_rope",
         experiments_path="experiments",
         experiments_optimization_path="experiments_optimization",
@@ -337,7 +270,7 @@ if __name__ == "__main__":
     controller_xyzs = []
     controller_rots = []
     for i in range(142):
-        path = f"/home/hanxiao/Downloads/episode_0000/robot/{(i+1):06d}.txt"
+        path = f"{EXAMPLE_ROLLOUT_DIR}/robot/{(i+1):06d}.txt"
         with open(path, "r") as f:
             lines = f.readlines()
             controller_xyz = np.array(
