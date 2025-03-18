@@ -1,3 +1,4 @@
+# This version is only for pure inference rollout, not ready for training
 import torch
 from qqtt.utils import logger, cfg
 import warp as wp
@@ -910,6 +911,9 @@ class SpringMassSystemWarpAccelerate:
             and self.num_object_points == self.wp_states[0].wp_x.shape[0]
         )
 
+        # Currently this one only supports pure inference rollout
+        assert pure_inference
+
         if not pure_inference:
             wp.launch(
                 copy_vec3,
@@ -962,13 +966,13 @@ class SpringMassSystemWarpAccelerate:
 
     def update_collision_graph(self):
         assert self.object_collision_flag
-        self.collision_grid.build(self.wp_states[0].wp_x, self.collision_dist * 5.0)
+        self.collision_grid.build(self.wp_states[-1].wp_x, self.collision_dist * 5.0)
         self.wp_collision_number.zero_()
         wp.launch(
             update_potential_collision,
             dim=self.num_object_points,
             inputs=[
-                self.wp_states[0].wp_x,
+                self.wp_states[-1].wp_x,
                 self.wp_masks,
                 self.collision_dist,
                 self.collision_grid.id,

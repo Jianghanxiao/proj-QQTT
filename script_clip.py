@@ -2,8 +2,8 @@ import os
 import glob
 import csv
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/more_additional"
-output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/more_additional"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/more_clothes"
+output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/more_clothes"
 
 # Read the csv
 with open(f"clip_start_end.csv", "r") as f:

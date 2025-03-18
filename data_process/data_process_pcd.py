@@ -139,8 +139,28 @@ def get_pcd_from_data(path, frame_idx, num_cam, intrinsics, c2ws):
         total_colors.append(color)
         total_masks.append(masks)
     # pcd = o3d.geometry.PointCloud()
-    # pcd.points = o3d.utility.Vector3dVector(np.concatenate(total_points).reshape(-1, 3))
-    # pcd.colors = o3d.utility.Vector3dVector(np.concatenate(total_colors).reshape(-1, 3))
+    # visualize_points = []
+    # visualize_colors = []
+    # for i in range(num_cam):
+    #     visualize_points.append(
+    #         total_points[i][total_masks[i]].reshape(-1, 3)
+    #     )
+    #     visualize_colors.append(
+    #         total_colors[i][total_masks[i]].reshape(-1, 3)
+    #     )
+    # visualize_points = np.concatenate(visualize_points)
+    # visualize_colors = np.concatenate(visualize_colors)
+    # coordinates = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
+    # mask = np.logical_and(visualize_points[:, 2] > -0.15, visualize_points[:, 0] > -0.05)
+    # mask = np.logical_and(mask, visualize_points[:, 0] < 0.4)
+    # mask = np.logical_and(mask, visualize_points[:, 1] < 0.5)
+    # mask = np.logical_and(mask, visualize_points[:, 1] > -0.2)
+    # mask = np.logical_and(mask, visualize_points[:, 2] < 0.2)
+    # visualize_points = visualize_points[mask]
+    # visualize_colors = visualize_colors[mask]
+        
+    # pcd.points = o3d.utility.Vector3dVector(np.concatenate(visualize_points).reshape(-1, 3))
+    # pcd.colors = o3d.utility.Vector3dVector(np.concatenate(visualize_colors).reshape(-1, 3))
     # o3d.visualization.draw_geometries([pcd])
     total_points = np.asarray(total_points)
     total_colors = np.asarray(total_colors)
