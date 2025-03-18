@@ -530,10 +530,13 @@ if __name__ == "__main__":
         video_writer = cv2.VideoWriter(
             f"{output_dir}/final_matching.mp4", fourcc, 30, (width, height)
         )
-
+        # final_mesh_world.compute_vertex_normals()
+        # final_mesh_world.translate([0, 0, 0.2])
+        # mesh_wireframe = o3d.geometry.LineSet.create_from_triangle_mesh(final_mesh_world)
+        # o3d.visualization.draw_geometries([pcd, final_mesh_world], window_name="Matching")
         vis.add_geometry(pcd)
         vis.add_geometry(final_mesh_world)
-        vis.add_geometry(coordinate)
+        # vis.add_geometry(coordinate)
         view_control = vis.get_view_control()
 
         for j in range(360):

@@ -126,7 +126,7 @@ def process_unique_points(track_data):
     )
 
     vis.add_geometry(all_pcd)
-    vis.add_geometry(coorindate)
+    # vis.add_geometry(coorindate)
     view_control = vis.get_view_control()
     for j in range(360):
         view_control.rotate(10, 0)
