@@ -2,21 +2,14 @@
 
 # ENV setup
 ```
+<!-- # if default CUDA is not 12.1
+export PATH={YOUR_DIR}/cuda/cuda-12.1/bin:$PATH
+export LD_LIBRARY_PATH={YOUR_DIR}/cuda/cuda-12.1/lib64:$LD_LIBRARY_PATH -->
+
 conda create -y -n qqtt python=3.10
 conda activate qqtt
 bash ./env_install/env_install.sh
 bash ./env_install/download_pretrained_models.sh
-
-# additional setup for gaussian splatting part
-pip install gsplat
-pip install kornia
-cd gaussian_splatting/
-pip install submodules/diff-gaussian-rasterization/
-pip install submodules/simple-knn/
-
-# if default CUDA is not 12.1
-export PATH=/home/haoyuyh3/Documents/maxhsu/cuda/cuda-12.1/bin:$PATH
-export LD_LIBRARY_PATH=/home/haoyuyh3/Documents/maxhsu/cuda/cuda-12.1/lib64:$LD_LIBRARY_PATH
 
 # download pretrained gaussians from:
 # https://drive.google.com/file/d/1ffNOGlPPJ20XKjxfR-sSl6K6zodpaRHK/view?usp=sharing

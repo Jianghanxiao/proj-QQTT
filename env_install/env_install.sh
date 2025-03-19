@@ -38,3 +38,10 @@ cd TRELLIS
 . ./setup.sh --basic --xformers --flash-attn --diffoctreerast --spconv --mipgaussian --kaolin --nvdiffrast
 
 cd ../..
+
+pip install gsplat
+pip install kornia
+cd gaussian_splatting/
+pip install submodules/diff-gaussian-rasterization/
+pip install submodules/simple-knn/
+cd ..
