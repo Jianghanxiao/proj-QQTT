@@ -1047,7 +1047,7 @@ class InvPhyTrainerWarp:
         min_idx = min_indices[torch.argmin(min_dist_per_ctrl_pts)]
         return self.structure_points[min_idx].unsqueeze(0)
 
-    def interactive_playground(self, model_path, gs_path, n_ctrl_parts=1, inv_ctrl=False, remove_gs_from_mesh=False, remove_dist_th=0.01):
+    def interactive_playground(self, model_path, gs_path, n_ctrl_parts=1, inv_ctrl=False):
         # Load the model
         logger.info(f"Load model from {model_path}")
         checkpoint = torch.load(model_path, map_location=cfg.device)
@@ -1102,21 +1102,6 @@ class InvPhyTrainerWarp:
         gaussians = GaussianModel(sh_degree=3)
         gaussians.load_ply(gs_path)
         gaussians = remove_gaussians_with_low_opacity(gaussians, 0.1)
-        if remove_gs_from_mesh:
-            N_SAMPLES = 100_000
-            DIST_THRESHOLD = remove_dist_th
-            if os.path.exists(cfg.mesh_path):
-                print(f"Sampling {N_SAMPLES} points from mesh")
-                mesh = o3d.io.read_triangle_mesh(cfg.mesh_path)
-                sampled_points = np.asarray(mesh.sample_points_uniformly(number_of_points=N_SAMPLES).points)
-            elif os.path.exists(cfg.pcd_path):
-                print(f"Sampled {N_SAMPLES} points from point cloud observation")
-                pcd = o3d.io.read_point_cloud(cfg.pcd_path)
-                xyz = np.asarray(pcd.points)
-                num_points = min(xyz.shape[0], N_SAMPLES)
-                sampled_points = xyz[np.random.choice(xyz.shape[0], num_points, replace=False)]
-            mesh_sampled_points = torch.tensor(sampled_points, dtype=torch.float32, device="cuda")
-            gaussians = remove_gaussians_with_point_mesh_distance(gaussians, mesh_sampled_points, DIST_THRESHOLD)
         gaussians.isotropic = True
         current_pos = gaussians.get_xyz
         current_rot = gaussians.get_rotation
@@ -1127,7 +1112,7 @@ class InvPhyTrainerWarp:
         prev_x = None
         relations = None
         weights = None
-        image_path = f"{cfg.overlay_path}/{vis_cam_idx}/204.png"
+        image_path = cfg.bg_img_path
         overlay = cv2.imread(image_path)
         overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
 

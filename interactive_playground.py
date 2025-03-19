@@ -1,3 +1,5 @@
+# import sys
+# sys.path.append("./gaussian_splatting")
 from qqtt import InvPhyTrainerWarp
 from qqtt.utils import logger, cfg
 from datetime import datetime
@@ -9,7 +11,6 @@ import glob
 import os
 import pickle
 import json
-
 
 def set_all_seeds(seed):
     random.seed(seed)
@@ -24,20 +25,28 @@ def set_all_seeds(seed):
 seed = 42
 set_all_seeds(seed)
 
-background_image = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/bg/color/0/204.png"
-
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument(
         "--base_path",
         type=str,
-        default="/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian_data",
+        default="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types",
     )
-    parser.add_argument("--case_name", type=str, default="single_lift_rope")
-    parser.add_argument("--n_ctrl_parts", type=int, default=1)
-    parser.add_argument("--inv_ctrl", action="store_true", help="invert horizontal control direction")
-    parser.add_argument("--remove_gs_from_mesh", action="store_true", help="remove gaussians that are far from mesh")
-    parser.add_argument("--remove_dist_th", type=float, default=0.01, help="distance threshold for removing gaussians")
+    parser.add_argument(
+        "--gaussian_path",
+        type=str,
+        default="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/gaussian_splatting/output",
+    )
+    parser.add_argument(
+        "--bg_img_path",
+        type=str,
+        default="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/past_data_collect/bg/color/0/204.png",
+    )
+    parser.add_argument("--case_name", type=str, default="double_lift_cloth_3")
+    parser.add_argument("--n_ctrl_parts", type=int, default=2)
+    parser.add_argument(
+        "--inv_ctrl", action="store_true", help="invert horizontal control direction"
+    )
     args = parser.parse_args()
 
     base_path = args.base_path
@@ -61,32 +70,19 @@ if __name__ == "__main__":
     cfg.set_optimal_params(optimal_params)
 
     # Set the intrinsic and extrinsic parameters for visualization
-    # with open(f"{base_path}/{case_name}/calibrate.pkl", "rb") as f:
-    #     c2ws = pickle.load(f)
-    # w2cs = [np.linalg.inv(c2w) for c2w in c2ws]
-    # cfg.c2ws = np.array(c2ws)
-    # cfg.w2cs = np.array(w2cs)
-    # with open(f"{base_path}/{case_name}/metadata.json", "r") as f:
-    #     data = json.load(f)
-    # cfg.intrinsics = np.array(data["intrinsics"])
-    # cfg.WH = data["WH"]
-    cfg.overlay_path = f"/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/data_collect/20250227_143503/color"
-
-    # TODO: my version of reading intrinsics and extrinsics
-    with open(f"{base_path}/{case_name}/camera_meta.pkl", 'rb') as f:
-        camera_info = pickle.load(f)
-    c2ws = camera_info['c2ws']
+    with open(f"{base_path}/{case_name}/calibrate.pkl", "rb") as f:
+        c2ws = pickle.load(f)
     w2cs = [np.linalg.inv(c2w) for c2w in c2ws]
     cfg.c2ws = np.array(c2ws)
     cfg.w2cs = np.array(w2cs)
-    cfg.intrinsics = np.array([np.array(intr) for intr in camera_info['intrinsics']])
-    cfg.WH = (848, 480)  # fixed resolution
-    exp_name = 'init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0'
-    gaussians_path = f"/home/haoyuyh3/Documents/maxhsu/qqtt/proj-QQTT/gaussian_splatting/output/{case_name}/{exp_name}/point_cloud/iteration_10000/point_cloud.ply"
+    with open(f"{base_path}/{case_name}/metadata.json", "r") as f:
+        data = json.load(f)
+    cfg.intrinsics = np.array(data["intrinsics"])
+    cfg.WH = data["WH"]
+    cfg.bg_img_path = args.bg_img_path
 
-    cfg.mask_path = f"{base_path}/{case_name}/"
-    cfg.mesh_path = f"{base_path}/{case_name}/shape_prior.glb"
-    cfg.pcd_path = f"{base_path}/{case_name}/observation.ply"
+    exp_name = "init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0"
+    gaussians_path = f"{args.gaussian_path}/{case_name}/{exp_name}/point_cloud/iteration_10000/point_cloud.ply"
 
     logger.set_log_file(path=base_dir, name="inference_log")
     trainer = InvPhyTrainerWarp(
@@ -96,14 +92,6 @@ if __name__ == "__main__":
     )
 
     best_model_path = glob.glob(f"experiments/{case_name}/train/best_*.pth")[0]
-    trainer.interactive_playground(best_model_path, gaussians_path, args.n_ctrl_parts, args.inv_ctrl, args.remove_gs_from_mesh, args.remove_dist_th)
-
-
-    # TODO: installation commands
-    # pip install gsplat
-    # export PATH=/home/haoyuyh3/Documents/maxhsu/cuda/cuda-12.1/bin:$PATH
-    # export LD_LIBRARY_PATH=/home/haoyuyh3/Documents/maxhsu/cuda/cuda-12.1/lib64:$LD_LIBRARY_PATH
-    # cd gaussian_splatting/
-    # pip install submodules/diff-gaussian-rasterization/
-    # pip install submodules/simple-knn/
-    # pip install kornia
+    trainer.interactive_playground(
+        best_model_path, gaussians_path, args.n_ctrl_parts, args.inv_ctrl
+    )
