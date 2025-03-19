@@ -1,6 +1,4 @@
-# output_dir="/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output"
-output_dir="/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_dynamic_for_sydney"
-output_video_dir="/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_video"
+output_dir="/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_dynamic_only_first"
 
 # views=("00000" "00025" "00050" "00075" "00100" "00125")
 views=("0" "1" "2")
@@ -14,19 +12,16 @@ scenes=("double_lift_cloth_1" "double_lift_cloth_3" "double_lift_sloth" "double_
         "single_push_rope" "single_push_rope_1" "single_push_rope_4"
         "single_push_sloth"
         "weird_package")
-# scenes=("single_lift_cloth_1")
 
-exp_name='init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0'
 
 for scene_name in "${scenes[@]}"; do
 
-    python render_dynamics.py \
-        -s ../../gaussian_data/${scene_name} \
-        -m ./output/${scene_name}/${exp_name} \
-        --name ${scene_name} \
-        --white_background
-
-    # mkdir -p ${output_video_dir}/${scene_name}/dynamic/${exp_name}
+    # use target gaussians directly
+    python render_dynamics_only_first.py \
+        -s ../../gaussian_data/double_lift_cloth_1 \
+        -m ./output/double_lift_cloth_1/init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0 \
+        --name ${scene_name}
+        # --white_background
 
     for view_name in "${views[@]}"; do
         # Convert images to video

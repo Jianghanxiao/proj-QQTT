@@ -10,16 +10,16 @@
 #
 
 import torch
-from .scene import Scene
+from scene import Scene
 import os
 from tqdm import tqdm
 from os import makedirs
-from .gaussian_renderer import render
+from gaussian_renderer import render
 import torchvision
-from .utils.general_utils import safe_state
+from utils.general_utils import safe_state
 from argparse import ArgumentParser
-from .arguments import ModelParams, PipelineParams, get_combined_args
-from .gaussian_renderer import GaussianModel
+from arguments import ModelParams, PipelineParams, get_combined_args
+from gaussian_renderer import GaussianModel
 try:
     from diff_gaussian_rasterization import SparseGaussianAdam
     SPARSE_ADAM_AVAILABLE = True
@@ -36,6 +36,11 @@ import pytorch3d.ops as ops
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background, train_test_exp, separate_sh, disable_sh=False):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
+
+    # TODO: temporary debug for demo
+    # scene_name = model_path.split('/')[-2]
+    # render_path = os.path.join('./output_tmp_for_sydney', scene_name, "renders")
+    # gts_path = os.path.join('./output_tmp_for_sydney', scene_name, "gt")
 
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
@@ -69,6 +74,20 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
 
         # remove gaussians that are low opacity
         gaussians = remove_gaussians_with_low_opacity(gaussians)
+
+        # TODO: quick demo purpose (remove later)
+        # # sub-sample the gaussians
+        # n_subsample = 1000
+        # idx = torch.randperm(gaussians._xyz.size(0))[:n_subsample]
+        # gaussians._xyz = gaussians._xyz[idx]
+        # gaussians._features_dc = gaussians._features_dc[idx]
+        # gaussians._features_rest = gaussians._features_rest[idx]
+        # gaussians._scaling = gaussians._scaling[idx]
+        # gaussians._rotation = gaussians._rotation[idx]
+        # gaussians._opacity = gaussians._opacity[idx]
+        # # set the scale of the gaussians
+        # scale = 0.01
+        # gaussians._scaling = gaussians.scaling_inverse_activation(torch.ones_like(gaussians._scaling) * scale)
 
         # remove gaussians that are far from the mesh
         # gaussians = remove_gaussians_with_point_mesh_distance(gaussians, scene.mesh_sampled_points, dist_threshold=0.01)
@@ -207,8 +226,7 @@ def remove_gaussians_with_point_mesh_distance(gaussians, mesh_sampled_points, di
     mask3d = (dists_bq[1].squeeze(0) != -1).squeeze(-1)
     print(f"Removing {len(mask3d) - mask3d.sum()} gaussians with distance < {dist_threshold}")
 
-    # new_gaussians = copy.deepcopy(gaussians)
-    new_gaussians = copy.copy(gaussians)
+    new_gaussians = copy.deepcopy(gaussians)
     new_gaussians._xyz = gaussians._xyz[mask3d]
     new_gaussians._features_dc = gaussians._features_dc[mask3d]
     new_gaussians._features_rest = gaussians._features_rest[mask3d]

@@ -26,15 +26,15 @@ def compute_iou(mask1, mask2):
 if __name__ == "__main__":
     
     root_data_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian_data'
-    output_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_dynamic'
+    output_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_dynamic_spring_gaus'
 
     log_dir = './logs'
     os.makedirs(log_dir, exist_ok=True)
-    log_file_path = os.path.join(log_dir, 'output_dynamic.txt')
+    log_file_path = os.path.join(log_dir, 'output_dynamic_spring_gaus.txt')
 
     with open(log_file_path, 'w') as log_file:
 
-        scene_name = sorted(os.listdir(root_data_dir))
+        scene_name = sorted(os.listdir(output_dir))
 
         all_psnrs_train, all_ssims_train, all_lpipss_train, all_ious_train = [], [], [], []
         all_psnrs_test, all_ssims_test, all_lpipss_test, all_ious_test = [], [], [], []
@@ -59,62 +59,61 @@ if __name__ == "__main__":
             psnrs_train, ssims_train, lpipss_train, ious_train = [], [], [], []
             psnrs_test, ssims_test, lpipss_test, ious_test = [], [], [], []
 
-            # for view_idx in range(3):
-            for view_idx in range(1):   # only consider the first view
+            view_idx = 0
 
-                for frame_idx in train_f_idx_range:
+            for frame_idx in train_f_idx_range:
 
-                    gt = np.array(Image.open(os.path.join(scene_dir, 'color', str(view_idx), f'{frame_idx}.png')))
-                    gt_mask = np.array(Image.open(os.path.join(scene_dir, 'mask', str(view_idx), f'{frame_idx}.png')))
-                    gt_mask = gt_mask.astype(np.float32) / 255.
+                gt = np.array(Image.open(os.path.join(scene_dir, 'color', str(view_idx), f'{frame_idx}.png')))
+                gt_mask = np.array(Image.open(os.path.join(scene_dir, 'mask', str(view_idx), f'{frame_idx}.png')))
+                gt_mask = gt_mask.astype(np.float32) / 255.
 
-                    render = np.array(Image.open(os.path.join(output_scene_dir, str(view_idx), f'{frame_idx:05d}.png')))
-                    render_mask = render[:, :, 3] if render.shape[-1] == 4 else np.ones_like(render[:, :, 0])
+                render = np.array(Image.open(os.path.join(output_scene_dir, f'{frame_idx:05d}.png')))
+                render_mask = render[:, :, 3] if render.shape[-1] == 4 else np.ones_like(render[:, :, 0])
 
-                    human_mask = np.array(Image.open(os.path.join(scene_dir, 'human_mask', str(view_idx), '0', f'{frame_idx}.png')))
-                    inv_human_mask = (1.0 - human_mask / 255.).astype(np.float32)
+                human_mask = np.array(Image.open(os.path.join(scene_dir, 'human_mask', str(view_idx), '0', f'{frame_idx}.png')))
+                inv_human_mask = (1.0 - human_mask / 255.).astype(np.float32)
 
-                    gt = gt.astype(np.float32) * gt_mask[..., None]
-                    render = render[:, :, :3].astype(np.float32)
+                gt = gt.astype(np.float32) * gt_mask[..., None]
+                render = render[:, :, :3].astype(np.float32)
 
-                    gt = gt * inv_human_mask[..., None]
-                    render = render * inv_human_mask[..., None]
-                    render_mask = render_mask * inv_human_mask
+                gt = gt * inv_human_mask[..., None]
+                render = render * inv_human_mask[..., None]
+                render_mask = render_mask * inv_human_mask
 
-                    gt_tensor = img2tensor(gt)
-                    render_tensor = img2tensor(render)
+                gt_tensor = img2tensor(gt)
+                render_tensor = img2tensor(render)
 
-                    psnrs_train.append(psnr(render_tensor, gt_tensor).item())
-                    ssims_train.append(ssim(render_tensor, gt_tensor).item())
-                    lpipss_train.append(lpips(render_tensor, gt_tensor).item())
-                    ious_train.append(compute_iou(gt_mask > 0, render_mask > 0))
+                psnrs_train.append(psnr(render_tensor, gt_tensor).item())
+                ssims_train.append(ssim(render_tensor, gt_tensor).item())
+                lpipss_train.append(lpips(render_tensor, gt_tensor).item())
+                ious_train.append(compute_iou(gt_mask > 0, render_mask > 0))
 
-                for frame_idx in test_f_idx_range:
-                        
-                    gt = np.array(Image.open(os.path.join(scene_dir, 'color', str(view_idx), f'{frame_idx}.png')))
-                    gt_mask = np.array(Image.open(os.path.join(scene_dir, 'mask', str(view_idx), f'{frame_idx}.png')))
-                    gt_mask = gt_mask.astype(np.float32) / 255.
+            for frame_idx in test_f_idx_range:
+                    
+                gt = np.array(Image.open(os.path.join(scene_dir, 'color', str(view_idx), f'{frame_idx}.png')))
+                gt_mask = np.array(Image.open(os.path.join(scene_dir, 'mask', str(view_idx), f'{frame_idx}.png')))
+                gt_mask = gt_mask.astype(np.float32) / 255.
 
-                    render = np.array(Image.open(os.path.join(output_scene_dir, str(view_idx), f'{frame_idx:05d}.png')))
-                    render_mask = render[:, :, 3] if render.shape[-1] == 4 else np.ones_like(render[:, :, 0])
+                render = np.array(Image.open(os.path.join(output_scene_dir, f'{frame_idx:05d}.png')))
+                render_mask = render[:, :, 3] if render.shape[-1] == 4 else np.ones_like(render[:, :, 0])
 
-                    human_mask = np.array(Image.open(os.path.join(scene_dir, 'human_mask', str(view_idx), '0', f'{frame_idx}.png')))
-                    inv_human_mask = (1.0 - human_mask / 255.).astype(np.float32)
+                human_mask = np.array(Image.open(os.path.join(scene_dir, 'human_mask', str(view_idx), '0', f'{frame_idx}.png')))
+                inv_human_mask = (1.0 - human_mask / 255.).astype(np.float32)
 
-                    gt = gt.astype(np.float32) * gt_mask[..., None]
-                    render = render[:, :, :3].astype(np.float32)
+                gt = gt.astype(np.float32) * gt_mask[..., None]
+                render = render[:, :, :3].astype(np.float32)
 
-                    gt = gt * inv_human_mask[..., None]
-                    render = render * inv_human_mask[..., None]
-                    render_mask = render_mask * inv_human_mask
+                gt = gt * inv_human_mask[..., None]
+                render = render * inv_human_mask[..., None]
+                render_mask = render_mask * inv_human_mask
 
-                    gt_tensor = img2tensor(gt)
-                    render_tensor = img2tensor(render)
+                gt_tensor = img2tensor(gt)
+                render_tensor = img2tensor(render)
 
-                    psnrs_test.append(psnr(render_tensor, gt_tensor).item())
-                    ssims_test.append(ssim(render_tensor, gt_tensor).item())
-                    lpipss_test.append(lpips(render_tensor, gt_tensor).item())
-                    ious_test.append(compute_iou(gt_mask > 0, render_mask > 0))
+                psnrs_test.append(psnr(render_tensor, gt_tensor).item())
+                ssims_test.append(ssim(render_tensor, gt_tensor).item())
+                lpipss_test.append(lpips(render_tensor, gt_tensor).item())
+                ious_test.append(compute_iou(gt_mask > 0, render_mask > 0))
 
             scene_metrics[scene] = {
                 'psnr_train': np.mean(psnrs_train),

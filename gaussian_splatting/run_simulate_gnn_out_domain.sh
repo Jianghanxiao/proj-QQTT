@@ -1,0 +1,49 @@
+output_dir="/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_dynamic_gnn_out_domain"
+
+# views=("00000" "00025" "00050" "00075" "00100" "00125")
+views=("0" "1" "2")
+
+scenes=(
+    "render-double_lift_cloth_1_to_single_clift_cloth_1-model_50"
+    "render-double_lift_cloth_1_to_single_lift_cloth_1-model_50"
+    "render-double_lift_cloth_3_to_single_clift_cloth_3-model_50"
+    "render-double_lift_cloth_3_to_single_lift_cloth_3-model_50"
+    "render-double_lift_sloth_to_double_stretch_sloth-model_50"
+    "render-double_lift_zebra_to_double_stretch_zebra-model_50"
+    "render-double_stretch_sloth_to_double_lift_sloth-model_50"
+    "render-double_stretch_zebra_to_double_lift_zebra-model_50"
+    "render-rope_double_hand_to_single_lift_rope-model_50"
+    "render-rope_double_hand_to_single_push_rope-model_50"
+    "render-single_clift_cloth_1_to_double_lift_cloth_1-model_50"
+    "render-single_clift_cloth_1_to_single_lift_cloth_1-model_50"
+    "render-single_clift_cloth_3_to_double_lift_cloth_3-model_50"
+    "render-single_clift_cloth_3_to_single_lift_cloth_3-model_50"
+    "render-single_lift_cloth_1_to_double_lift_cloth_1-model_50"
+    "render-single_lift_cloth_1_to_single_clift_cloth_1-model_50"
+    "render-single_lift_cloth_3_to_double_lift_cloth_3-model_50"
+    "render-single_lift_cloth_3_to_single_clift_cloth_3-model_50"
+    "render-single_lift_rope_to_rope_double_hand-model_50"
+    "render-single_lift_rope_to_single_push_rope-model_50"
+    "render-single_push_rope_to_rope_double_hand-model_50"
+    "render-single_push_rope_to_single_lift_rope-model_50"
+)
+# scenes=("render-double_lift_cloth_1_to_single_clift_cloth_1-model_50")
+
+
+for scene_name in "${scenes[@]}"; do
+
+    # use target gaussians directly
+    python render_dynamics_gnn_out_domain.py \
+        -s ../../gaussian_data/double_lift_cloth_1 \
+        -m ./output/double_lift_cloth_1/init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0 \
+        --exp_name ${scene_name}
+        # --white_background
+
+    for view_name in "${views[@]}"; do
+        # Convert images to video
+        python ../../../utils-script/img2video.py \
+            --image_folder ${output_dir}/${scene_name}/${view_name} \
+            --video_path ${output_dir}/${scene_name}/${view_name}.mp4
+    done
+
+done

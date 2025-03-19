@@ -63,19 +63,16 @@ def render_set(output_path, name, views, gaussians_list, pipeline, background, t
             torchvision.utils.save_image(rendering, os.path.join(view_render_path, '{0:05d}'.format(frame_idx) + ".png"))
 
 
-def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, separate_sh: bool, remove_gaussians: bool = False, exp_name: str = "dynamic"):
+def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, separate_sh: bool, remove_gaussians: bool = False, name: str = "dynamic"):
     with torch.no_grad():
 
-        output_path = './output_dynamic_gnn'
+        output_path = './output_dynamic_only_second'
 
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
-        # example name: render-double_lift_cloth_1-model_10
-        source_name = exp_name.split('-')[1].split('-')[0]
-
-        dataset.source_path = os.path.join("../../gaussian_data/", source_name)
-        dataset.model_path = os.path.join("./output", source_name, "init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0")
+        dataset.source_path = os.path.join("../../gaussian_data/", name)
+        dataset.model_path = os.path.join("./output", name, "init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0")
         gaussians = GaussianModel(dataset.sh_degree)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
 
@@ -84,10 +81,13 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
             gaussians = remove_gaussians_with_mask(gaussians, scene.getTrainCameras())
 
         # remove gaussians that are low opacity
-        gaussians = remove_gaussians_with_low_opacity(gaussians, opacity_threshold=0.1)
+        gaussians = remove_gaussians_with_low_opacity(gaussians)
+
+        # remove gaussians that are far from the mesh
+        # gaussians = remove_gaussians_with_point_mesh_distance(gaussians, scene.mesh_sampled_points, dist_threshold=0.01)
 
         # rollout
-        ctrl_pts_path = os.path.join('./experiments_gnn', exp_name, "inference.pkl")
+        ctrl_pts_path = os.path.join('./experiments_only_second', name, "inference.pkl")
         with open(ctrl_pts_path, 'rb') as f:
             ctrl_pts = pickle.load(f)  # (n_frames, n_ctrl_pts, 3) ndarray
         ctrl_pts = torch.tensor(ctrl_pts, dtype=torch.float32, device="cuda")
@@ -136,7 +136,47 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
 
         views = scene.getTestCameras()
 
-        render_set(output_path, exp_name, views, gaussians_list, pipeline, background, dataset.train_test_exp, separate_sh, disable_sh=dataset.disable_sh)
+        render_set(output_path, name, views, gaussians_list, pipeline, background, dataset.train_test_exp, separate_sh, disable_sh=dataset.disable_sh)
+
+
+# def rollout(xyz_0, rgb_0, quat_0, opa_0, ctrl_pts, n_steps, device='cuda'):
+    
+#     # store results
+#     xyz = xyz_0.cpu()[None].repeat(n_steps, 1, 1)     # (n_steps, n_gaussians, 3)
+#     rgb = rgb_0.cpu()[None].repeat(n_steps, 1, 1)     # (n_steps, n_gaussians, 3)
+#     quat = quat_0.cpu()[None].repeat(n_steps, 1, 1)   # (n_steps, n_gaussians, 4)
+#     opa = opa_0.cpu()[None].repeat(n_steps, 1, 1)     # (n_steps, n_gaussians, 1)
+
+#     # init relation matrix
+#     init_particle_pos = ctrl_pts[0]
+#     relation_matrix = create_relation_matrix(init_particle_pos, K=8)
+
+#     all_pos = xyz_0
+
+#     for i in tqdm(range(1, n_steps), desc="Rollout progress", dynamic_ncols=True):
+
+#         prev_particle_pos = ctrl_pts[i - 1]
+#         cur_particle_pos = ctrl_pts[i]
+
+#         # weights = knn_weights(prev_particle_pos, all_pos, K=8)
+#         weights = None
+        
+#         # interpolate all_pos and particle_pos
+#         all_pos, all_rot, _ = interpolate_motions(
+#             bones=prev_particle_pos,
+#             motions=cur_particle_pos - prev_particle_pos,
+#             relations=relation_matrix,
+#             xyz=all_pos,
+#             quat=quat[i - 1].to(device),
+#             weights=weights,
+#         )
+
+#         quat[i] = all_rot.cpu()
+#         xyz[i] = all_pos.cpu()
+#         rgb[i] = rgb[i - 1].clone()
+#         opa[i] = opa[i - 1].clone()
+
+#     return xyz, rgb, quat, opa
 
 
 def rollout(xyz_0, rgb_0, quat_0, opa_0, ctrl_pts, n_steps, device='cuda'):
@@ -199,14 +239,14 @@ if __name__ == "__main__":
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--remove_gaussians", action="store_true")
-    parser.add_argument("--exp_name", default="render-expA-model_50", type=str)
+    parser.add_argument("--name", default="sceneA", type=str)
     args = get_combined_args(parser)
     print("Rendering " + args.model_path)
 
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test, SPARSE_ADAM_AVAILABLE, args.remove_gaussians, args.exp_name)
+    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test, SPARSE_ADAM_AVAILABLE, args.remove_gaussians, args.name)
 
-    with open('./rendering_finished_dynamic_gnn.txt', 'a') as f:
-        f.write('Rendering finished of ' + args.exp_name + '\n')
+    with open('./rendering_finished_dynamic_only_second.txt', 'a') as f:
+        f.write('Rendering finished of ' + args.name + '\n')

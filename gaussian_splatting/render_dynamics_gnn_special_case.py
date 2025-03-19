@@ -66,13 +66,14 @@ def render_set(output_path, name, views, gaussians_list, pipeline, background, t
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, separate_sh: bool, remove_gaussians: bool = False, exp_name: str = "dynamic"):
     with torch.no_grad():
 
-        output_path = './output_dynamic_gnn'
+        output_path = './output_dynamic_gnn_special_case'
 
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
         # example name: render-double_lift_cloth_1-model_10
-        source_name = exp_name.split('-')[1].split('-')[0]
+        # source_name = exp_name.split('-')[1].split('-')[0]
+        source_name = "rope_double_hand"
 
         dataset.source_path = os.path.join("../../gaussian_data/", source_name)
         dataset.model_path = os.path.join("./output", source_name, "init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0")
@@ -87,7 +88,8 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
         gaussians = remove_gaussians_with_low_opacity(gaussians, opacity_threshold=0.1)
 
         # rollout
-        ctrl_pts_path = os.path.join('./experiments_gnn', exp_name, "inference.pkl")
+        # ctrl_pts_path = os.path.join('./experiments_gnn', exp_name, "inference.pkl")
+        ctrl_pts_path = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/render-rope_e30_d10-model_50/rope_0/inference.pkl'
         with open(ctrl_pts_path, 'rb') as f:
             ctrl_pts = pickle.load(f)  # (n_frames, n_ctrl_pts, 3) ndarray
         ctrl_pts = torch.tensor(ctrl_pts, dtype=torch.float32, device="cuda")

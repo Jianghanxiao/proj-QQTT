@@ -26,38 +26,68 @@ def compute_iou(mask1, mask2):
 if __name__ == "__main__":
     
     root_data_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian_data'
-    output_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_dynamic_out_domain'
+    output_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_dynamic_only_second'
 
     log_dir = './logs'
     os.makedirs(log_dir, exist_ok=True)
-    log_file_path = os.path.join(log_dir, 'output_dynamic_out_domain.txt')
+    log_file_path = os.path.join(log_dir, 'output_dynamic_only_second.txt')
 
     with open(log_file_path, 'w') as log_file:
 
-        exp_names = sorted(os.listdir(output_dir))
+        scene_name = sorted(os.listdir(root_data_dir))
 
         all_psnrs_train, all_ssims_train, all_lpipss_train, all_ious_train = [], [], [], []
         all_psnrs_test, all_ssims_test, all_lpipss_test, all_ious_test = [], [], [], []
 
         scene_metrics = {}
 
-        for exp_name in exp_names:
+        for scene in scene_name:
 
-            target_name = exp_name.split("_to_")[1]
+            scene_dir = os.path.join(root_data_dir, scene)
+            output_scene_dir = os.path.join(output_dir, scene)
 
-            scene_dir = os.path.join(root_data_dir, target_name)
-            output_scene_dir = os.path.join(output_dir, exp_name)
+            # Load frame split info
+            with open(os.path.join(scene_dir, 'split.json'), 'r') as f:
+                info = json.load(f)
+            frame_len = info['frame_len']
+            train_f_idx_range = list(range(info["train"][0] + 1, info["train"][1]))   # +1 if ignoring the first frame
+            test_f_idx_range = list(range(info["test"][0], info["test"][1]))
 
-            frame_len = len(os.listdir(os.path.join(scene_dir, 'color', '0')))
-            assert frame_len == len(os.listdir(os.path.join(output_scene_dir, '0'))), "Number of frames do not match"
-            test_f_idx_range = list(range(1, frame_len))  # ignore the first frame
-
+            print("train indices range from", train_f_idx_range[0], "to", train_f_idx_range[-1])
             print("test indices range from", test_f_idx_range[0], "to", test_f_idx_range[-1])
 
+            psnrs_train, ssims_train, lpipss_train, ious_train = [], [], [], []
             psnrs_test, ssims_test, lpipss_test, ious_test = [], [], [], []
 
             # for view_idx in range(3):
             for view_idx in range(1):   # only consider the first view
+
+                for frame_idx in train_f_idx_range:
+
+                    gt = np.array(Image.open(os.path.join(scene_dir, 'color', str(view_idx), f'{frame_idx}.png')))
+                    gt_mask = np.array(Image.open(os.path.join(scene_dir, 'mask', str(view_idx), f'{frame_idx}.png')))
+                    gt_mask = gt_mask.astype(np.float32) / 255.
+
+                    render = np.array(Image.open(os.path.join(output_scene_dir, str(view_idx), f'{frame_idx:05d}.png')))
+                    render_mask = render[:, :, 3] if render.shape[-1] == 4 else np.ones_like(render[:, :, 0])
+
+                    human_mask = np.array(Image.open(os.path.join(scene_dir, 'human_mask', str(view_idx), '0', f'{frame_idx}.png')))
+                    inv_human_mask = (1.0 - human_mask / 255.).astype(np.float32)
+
+                    gt = gt.astype(np.float32) * gt_mask[..., None]
+                    render = render[:, :, :3].astype(np.float32)
+
+                    gt = gt * inv_human_mask[..., None]
+                    render = render * inv_human_mask[..., None]
+                    render_mask = render_mask * inv_human_mask
+
+                    gt_tensor = img2tensor(gt)
+                    render_tensor = img2tensor(render)
+
+                    psnrs_train.append(psnr(render_tensor, gt_tensor).item())
+                    ssims_train.append(ssim(render_tensor, gt_tensor).item())
+                    lpipss_train.append(lpips(render_tensor, gt_tensor).item())
+                    ious_train.append(compute_iou(gt_mask > 0, render_mask > 0))
 
                 for frame_idx in test_f_idx_range:
                         
@@ -86,30 +116,54 @@ if __name__ == "__main__":
                     lpipss_test.append(lpips(render_tensor, gt_tensor).item())
                     ious_test.append(compute_iou(gt_mask > 0, render_mask > 0))
 
-            scene_metrics[exp_name] = {
+            scene_metrics[scene] = {
+                'psnr_train': np.mean(psnrs_train),
+                'ssim_train': np.mean(ssims_train),
+                'lpips_train': np.mean(lpipss_train),
+                'iou_train': np.mean(ious_train),
                 'psnr_test': np.mean(psnrs_test),
                 'ssim_test': np.mean(ssims_test),
                 'lpips_test': np.mean(lpipss_test),
                 'iou_test': np.mean(ious_test)
             }
 
+            all_psnrs_train.extend(psnrs_train)
+            all_ssims_train.extend(ssims_train)
+            all_lpipss_train.extend(lpipss_train)
+            all_ious_train.extend(ious_train)
+
             all_psnrs_test.extend(psnrs_test)
             all_ssims_test.extend(ssims_test)
             all_lpipss_test.extend(lpipss_test)
             all_ious_test.extend(ious_test)
 
-            print(f'===== Exp: {exp_name} =====')
+            print(f'===== Scene: {scene} =====')
+            print(f'\t PSNR (train): {np.mean(psnrs_train):.4f}')
+            print(f'\t SSIM (train): {np.mean(ssims_train):.4f}')
+            print(f'\t LPIPS (train): {np.mean(lpipss_train):.4f}')
+            print(f'\t IoU (train): {np.mean(ious_train):.4f}')
+
             print(f'\t PSNR (test): {np.mean(psnrs_test):.4f}')
             print(f'\t SSIM (test): {np.mean(ssims_test):.4f}')
             print(f'\t LPIPS (test): {np.mean(lpipss_test):.4f}')
             print(f'\t IoU (test): {np.mean(ious_test):.4f}')
 
         print('===== Overall Results Across All Scenes =====')
+        print(f'\t Overall PSNR (train): {np.mean(all_psnrs_train):.4f}')
+        print(f'\t Overall SSIM (train): {np.mean(all_ssims_train):.4f}')
+        print(f'\t Overall LPIPS (train): {np.mean(all_lpipss_train):.4f}')
+        print(f'\t Overall IoU (train): {np.mean(all_ious_train):.4f}')
+
         print(f'\t Overall PSNR (test): {np.mean(all_psnrs_test):.4f}')
         print(f'\t Overall SSIM (test): {np.mean(all_ssims_test):.4f}')
         print(f'\t Overall LPIPS (test): {np.mean(all_lpipss_test):.4f}')
         print(f'\t Overall IoU (test): {np.mean(all_ious_test):.4f}')
 
+        overall_psnr_train = np.mean(all_psnrs_train)
+        overall_ssim_train = np.mean(all_ssims_train)
+        overall_lpips_train = np.mean(all_lpipss_train)
+        overall_iou_train = np.mean(all_ious_train)
+        
         overall_psnr_test = np.mean(all_psnrs_test)
         overall_ssim_test = np.mean(all_ssims_test)
         overall_lpips_test = np.mean(all_lpipss_test)
@@ -119,6 +173,11 @@ if __name__ == "__main__":
         log_file.write("\n" + "=" * 80 + "\n")
         log_file.write("OVERALL RESULTS ACROSS ALL SCENES\n")
         log_file.write("=" * 80 + "\n\n")
+        
+        log_file.write(f"Overall PSNR (train): {overall_psnr_train:.6f}\n")
+        log_file.write(f"Overall SSIM (train): {overall_ssim_train:.6f}\n")
+        log_file.write(f"Overall LPIPS (train): {overall_lpips_train:.6f}\n")
+        log_file.write(f"Overall IoU (train): {overall_iou_train:.6f}\n\n")
         
         log_file.write(f"Overall PSNR (test): {overall_psnr_test:.6f}\n")
         log_file.write(f"Overall SSIM (test): {overall_ssim_test:.6f}\n")
@@ -131,14 +190,19 @@ if __name__ == "__main__":
         log_file.write("=" * 80 + "\n\n")
         
         # Header
-        log_file.write(f"{'Scene':<50} | ")
+        log_file.write(f"{'Scene':<50} | {'PSNR-train':<12} | {'SSIM-train':<12} | {'LPIPS-train':<14} | {'IoU-train':<12} | ")
         log_file.write(f"{'PSNR-test':<12} | {'SSIM-test':<12} | {'LPIPS-test':<14} | {'IoU-test':<12}\n")
         log_file.write("-" * 160 + "\n")
         
         # Scene rows
-        for scene in exp_names:
+        for scene in scene_name:
             metrics = scene_metrics[scene]
-            log_file.write(f"{scene[:50]:<50} | ")            
+            log_file.write(f"{scene[:50]:<50} | ")
+            log_file.write(f"{metrics['psnr_train']:<12.6f} | ")
+            log_file.write(f"{metrics['ssim_train']:<12.6f} | ")
+            log_file.write(f"{metrics['lpips_train']:<14.6f} | ")
+            log_file.write(f"{metrics['iou_train']:<12.6f} | ")
+            
             log_file.write(f"{metrics['psnr_test']:<12.6f} | ")
             log_file.write(f"{metrics['ssim_test']:<12.6f} | ")
             log_file.write(f"{metrics['lpips_test']:<14.6f} | ")
@@ -146,7 +210,12 @@ if __name__ == "__main__":
         
         # Overall row
         log_file.write("-" * 160 + "\n")
-        log_file.write(f"{'OVERALL':<50} | ")        
+        log_file.write(f"{'OVERALL':<50} | ")
+        log_file.write(f"{overall_psnr_train:<12.6f} | ")
+        log_file.write(f"{overall_ssim_train:<12.6f} | ")
+        log_file.write(f"{overall_lpips_train:<14.6f} | ")
+        log_file.write(f"{overall_iou_train:<12.6f} | ")
+        
         log_file.write(f"{overall_psnr_test:<12.6f} | ")
         log_file.write(f"{overall_ssim_test:<12.6f} | ")
         log_file.write(f"{overall_lpips_test:<14.6f} | ")
@@ -155,9 +224,25 @@ if __name__ == "__main__":
         print(f"\nMetrics have been saved to: {log_file_path}")
 
 
+##### Include the first frame #####
+# ===== Overall Results Across All Scenes =====
+#          Overall PSNR (train): 30.0737
+#          Overall SSIM (train): 0.9646
+#          Overall LPIPS (train): 0.0251
+#          Overall IoU (train): 0.7936
+#          Overall PSNR (test): 28.0637
+#          Overall SSIM (test): 0.9615
+#          Overall LPIPS (test): 0.0382
+#          Overall IoU (test): 0.6881
+
+
 ##### Ignore the first frame #####
 # ===== Overall Results Across All Scenes =====
-#          Overall PSNR (test): 28.5245
-#          Overall SSIM (test): 0.9613
-#          Overall LPIPS (test): 0.0334
-#          Overall IoU (test): 0.6943
+#          Overall PSNR (train): 30.0279
+#          Overall SSIM (train): 0.9645
+#          Overall LPIPS (train): 0.0252
+#          Overall IoU (train): 0.7928
+#          Overall PSNR (test): 28.0637
+#          Overall SSIM (test): 0.9615
+#          Overall LPIPS (test): 0.0382
+#          Overall IoU (test): 0.6881
