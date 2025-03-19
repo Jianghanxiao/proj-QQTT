@@ -37,8 +37,8 @@ for scene_name in "${scenes[@]}"; do
     python render_dynamics_out_domain.py \
         -s ../../gaussian_data/double_lift_cloth_1 \
         -m ./output/double_lift_cloth_1/init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0 \
-        --exp_name ${scene_name} \
-        --white_background
+        --exp_name ${scene_name}
+        # --white_background
 
     for view_name in "${views[@]}"; do
         # Convert images to video

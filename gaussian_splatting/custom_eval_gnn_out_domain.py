@@ -26,11 +26,11 @@ def compute_iou(mask1, mask2):
 if __name__ == "__main__":
     
     root_data_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian_data'
-    output_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_dynamic_out_domain'
+    output_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian-recon/gaussian-splatting/output_dynamic_gnn_out_domain'
 
     log_dir = './logs'
     os.makedirs(log_dir, exist_ok=True)
-    log_file_path = os.path.join(log_dir, 'output_dynamic_out_domain.txt')
+    log_file_path = os.path.join(log_dir, 'output_dynamic_gnn_out_domain.txt')
 
     with open(log_file_path, 'w') as log_file:
 
@@ -43,7 +43,8 @@ if __name__ == "__main__":
 
         for exp_name in exp_names:
 
-            target_name = exp_name.split("_to_")[1]
+            tmp_exp_name = exp_name.replace('render-', '').replace('-model_50', '')
+            target_name = tmp_exp_name.split("_to_")[1]
 
             scene_dir = os.path.join(root_data_dir, target_name)
             output_scene_dir = os.path.join(output_dir, exp_name)
@@ -109,7 +110,7 @@ if __name__ == "__main__":
         print(f'\t Overall SSIM (test): {np.mean(all_ssims_test):.4f}')
         print(f'\t Overall LPIPS (test): {np.mean(all_lpipss_test):.4f}')
         print(f'\t Overall IoU (test): {np.mean(all_ious_test):.4f}')
-
+        
         overall_psnr_test = np.mean(all_psnrs_test)
         overall_ssim_test = np.mean(all_ssims_test)
         overall_lpips_test = np.mean(all_lpipss_test)
