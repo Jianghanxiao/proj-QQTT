@@ -70,25 +70,7 @@ def generate_interpolated_path(poses: np.ndarray,
 
 
 if __name__ == '__main__':
-    # Example usage (deprecated)
-    # dataset_dir = './data-3dgs/rope_double_hand'
-    # c2ws = pickle.load(open(os.path.join(dataset_dir, 'calibrate.pkl'), 'rb'))
-    # pose_0 = c2ws[0]
-    # pose_1 = c2ws[1]
-    # pose_2 = c2ws[2]
-    # n_interp = 50
-    # poses_01 = np.stack([pose_0, pose_1], 0)[:, :3, :]
-    # interp_poses_01 = generate_interpolated_path(poses_01, n_interp)
-    # poses_12 = np.stack([pose_1, pose_2], 0)[:, :3, :]
-    # interp_poses_12 = generate_interpolated_path(poses_12, n_interp)
-    # poses_20 = np.stack([pose_2, pose_0], 0)[:, :3, :]
-    # interp_poses_20 = generate_interpolated_path(poses_20, n_interp)
-    # interp_poses = np.concatenate([interp_poses_01, interp_poses_12, interp_poses_20], 0)
-    # output_poses = [np.vstack([pose, np.array([0, 0, 0, 1])]) for pose in interp_poses]
-    # pickle.dump(output_poses, open(os.path.join(dataset_dir, 'interp_poses.pkl'), 'wb'))
-
-    # Example usage
-    root_dir = '/home/haoyuyh3/Documents/maxhsu/qqtt/gaussian_data'
+    root_dir = "./data/gaussian_data"
     for scene_name in sorted(os.listdir(root_dir)):
         scene_dir = os.path.join(root_dir, scene_name)
         print(f'Processing {scene_name}')

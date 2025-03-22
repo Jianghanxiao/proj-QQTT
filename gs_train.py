@@ -12,16 +12,16 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim, depth_loss, normal_loss, anisotropic_loss
-from gaussian_renderer import render, network_gui
+from gaussian_splatting.utils.loss_utils import l1_loss, ssim, depth_loss, normal_loss, anisotropic_loss
+from gaussian_splatting.gaussian_renderer import render, network_gui
 import sys
-from scene import Scene, GaussianModel
-from utils.general_utils import safe_state, get_expon_lr_func
+from gaussian_splatting.scene import Scene, GaussianModel
+from gaussian_splatting.utils.general_utils import safe_state, get_expon_lr_func
 import uuid
 from tqdm import tqdm
-from utils.image_utils import psnr
+from gaussian_splatting.utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
-from arguments import ModelParams, PipelineParams, OptimizationParams
+from gaussian_splatting.arguments import ModelParams, PipelineParams, OptimizationParams
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -122,26 +122,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             render_pkg["visibility_filter"], \
             render_pkg["radii"]
         
-        # TODO: modify this afterwards
         pred_seg = image[3:, ...]
         image = image[:3, ...]
         gt_image = viewpoint_cam.original_image.cuda()
-
-        # print all shapes
-        # print("image shape: ", image.shape)
-        # print("depth shape: ", depth.shape)
-        # print("normal shape: ", normal.shape)
-        # print("gt_image shape: ", gt_image.shape)
-        # print("pred_seg shape: ", pred_seg.shape)
-        # print("occ_mask shape: ", viewpoint_cam.occ_mask.shape)
-
-        # print value range
-        # print("image range: ", image.min().item(), image.max().item())
-        # print("gt_image range: ", gt_image.min().item(), gt_image.max().item())
-        # print("depth range: ", depth.min().item(), depth.max().item())
-        # print("normal range: ", normal.min().item(), normal.max().item())
-        # print("pred_seg range: ", pred_seg.min().item(), pred_seg.max().item())
-        # print("occ_mask range: ", viewpoint_cam.occ_mask.min().item(), viewpoint_cam.occ_mask.max().item())
 
         # Mask out occluded regions
         if viewpoint_cam.occ_mask is not None:
@@ -154,7 +137,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # gt_image *= inv_occ_mask.unsqueeze(0)     # Shape: [3, 480, 848]
             pred_seg *= inv_occ_mask.unsqueeze(0)     # Shape: [1, 480, 848]
             depth *= inv_occ_mask                    # Shape: [480, 848]
-            normal *= inv_occ_mask.unsqueeze(-1)      # Shape: [480, 848, 3]
+            if normal is not None:
+                normal *= inv_occ_mask.unsqueeze(-1)      # Shape: [480, 848, 3]
 
         # Loss
         if viewpoint_cam.alpha_mask is not None:
@@ -300,41 +284,6 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
         tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
         tb_writer.add_scalar('train_loss_patches/total_loss', loss.item(), iteration)
         tb_writer.add_scalar('iter_time', elapsed, iteration)
-
-    # TODO: this part is buggy when using gsplat renderer
-    # Report test and samples of training set
-    # if iteration in testing_iterations:
-    #     torch.cuda.empty_cache()
-    #     validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
-    #                           {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
-
-    #     for config in validation_configs:
-    #         if config['cameras'] and len(config['cameras']) > 0:
-    #             l1_test = 0.0
-    #             psnr_test = 0.0
-    #             for idx, viewpoint in enumerate(config['cameras']):
-    #                 image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render"], 0.0, 1.0)
-    #                 gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
-    #                 if train_test_exp:
-    #                     image = image[..., image.shape[-1] // 2:]
-    #                     gt_image = gt_image[..., gt_image.shape[-1] // 2:]
-    #                 if tb_writer and (idx < 5):
-    #                     tb_writer.add_images(config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)
-    #                     if iteration == testing_iterations[0]:
-    #                         tb_writer.add_images(config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
-    #                 l1_test += l1_loss(image, gt_image).mean().double()
-    #                 psnr_test += psnr(image, gt_image).mean().double()
-    #             psnr_test /= len(config['cameras'])
-    #             l1_test /= len(config['cameras'])          
-    #             print("\n[ITER {}] Evaluating {}: L1 {} PSNR {}".format(iteration, config['name'], l1_test, psnr_test))
-    #             if tb_writer:
-    #                 tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
-    #                 tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
-
-    #     if tb_writer:
-    #         tb_writer.add_histogram("scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
-    #         tb_writer.add_scalar('total_points', scene.gaussians.get_xyz.shape[0], iteration)
-    #     torch.cuda.empty_cache()
 
 if __name__ == "__main__":
     # Set up command line argument parser

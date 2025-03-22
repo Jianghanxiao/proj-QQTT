@@ -21,7 +21,7 @@ from gaussian_splatting.scene.cameras import Camera
 from gaussian_splatting.gaussian_renderer import render as render_gaussian
 from gaussian_splatting.dynamic_utils import interpolate_motions_feng, interpolate_motions_feng_speedup, knn_weights, knn_weights_sparse, get_topk_indices, calc_weights_vals_from_indices
 from gaussian_splatting.utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
-from gaussian_splatting.render import remove_gaussians_with_low_opacity, remove_gaussians_with_point_mesh_distance
+from gs_render import remove_gaussians_with_low_opacity, remove_gaussians_with_point_mesh_distance
 from gaussian_splatting.rotation_utils import quaternion_multiply, matrix_to_quaternion
 
 from sklearn.cluster import KMeans
