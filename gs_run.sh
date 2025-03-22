@@ -10,9 +10,9 @@ output_video_dir="./gaussian_splatting/output_video"
 #         "single_push_sloth"
 #         "weird_package")
 
-scenes=("cloth_blue_fold", "cloth_blue_lift", "cloth_pant_fold", "cloth_pant_lift", 
-        "cloth_red_fold", "cloth_red_lift", "cloth_shirt_fold", "cloth_shirt_lift", 
-        "cloth_skirt_1_fold", "cloth_skirt_1_lift", "cloth_skirt_2_fold")
+scenes=("cloth_blue_fold" "cloth_blue_lift" "cloth_pant_fold" "cloth_pant_lift" 
+        "cloth_red_fold" "cloth_red_lift" "cloth_shirt_fold" "cloth_shirt_lift" 
+        "cloth_skirt_1_fold" "cloth_skirt_1_lift" "cloth_skirt_2_fold")
 
 # scenes=("cloth_blue_fold")
 

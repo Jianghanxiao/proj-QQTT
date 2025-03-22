@@ -2,6 +2,7 @@
 .vscode
 output
 output_video
+output_dynamic
 build
 diff_rasterization/diff_rast.egg-info
 diff_rasterization/dist

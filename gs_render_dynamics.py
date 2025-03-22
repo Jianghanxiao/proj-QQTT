@@ -10,16 +10,16 @@
 #
 
 import torch
-from scene import Scene
+from gaussian_splatting.scene import Scene
 import os
 from tqdm import tqdm
 from os import makedirs
-from gaussian_renderer import render
+from gaussian_splatting.gaussian_renderer import render
 import torchvision
-from utils.general_utils import safe_state
+from gaussian_splatting.utils.general_utils import safe_state
 from argparse import ArgumentParser
-from arguments import ModelParams, PipelineParams, get_combined_args
-from gaussian_renderer import GaussianModel
+from gaussian_splatting.arguments import ModelParams, PipelineParams, get_combined_args
+from gaussian_splatting.gaussian_renderer import GaussianModel
 try:
     from diff_gaussian_rasterization import SparseGaussianAdam
     SPARSE_ADAM_AVAILABLE = True
@@ -30,7 +30,7 @@ import numpy as np
 from kornia import create_meshgrid
 import copy
 from gs_render import remove_gaussians_with_mask, remove_gaussians_with_low_opacity, remove_gaussians_with_point_mesh_distance
-from dynamic_utils import interpolate_motions, interpolate_motions_feng, create_relation_matrix, knn_weights, get_topk_indices, quat2mat, mat2quat
+from gaussian_splatting.dynamic_utils import interpolate_motions, interpolate_motions_feng, create_relation_matrix, knn_weights, get_topk_indices, quat2mat, mat2quat
 import pickle
 
 
@@ -66,7 +66,7 @@ def render_set(output_path, name, views, gaussians_list, pipeline, background, t
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, separate_sh: bool, remove_gaussians: bool = False, name: str = "dynamic"):
     with torch.no_grad():
 
-        output_path = './output_dynamic'
+        output_path = './gaussian_splatting/output_dynamic'
 
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
@@ -85,7 +85,8 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
         # gaussians = remove_gaussians_with_point_mesh_distance(gaussians, scene.mesh_sampled_points, dist_threshold=0.01)
 
         # rollout
-        ctrl_pts_path = os.path.join(dataset.source_path, "inference.pkl")
+        exp_name = dataset.source_path.split("/")[-1]
+        ctrl_pts_path = f"./experiments/{exp_name}/inference.pkl"
         with open(ctrl_pts_path, 'rb') as f:
             ctrl_pts = pickle.load(f)  # (n_frames, n_ctrl_pts, 3) ndarray
         ctrl_pts = torch.tensor(ctrl_pts, dtype=torch.float32, device="cuda")

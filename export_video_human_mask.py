@@ -1,8 +1,8 @@
 import os
 import glob
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
-output_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types_human_mask"
+base_path = "./data/different_types"
+output_path = "./data/different_types_human_mask"
 
 def existDir(dir_path):
     if not os.path.exists(dir_path):

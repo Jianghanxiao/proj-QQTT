@@ -3,14 +3,15 @@ import json
 import numpy as np
 import cv2
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types"
+base_path = "./data/different_types"
 # prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/indomain_our/output_dynamic"
-prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/GNN_render/output_dynamic_gnn"
+# prediction_dir = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/exp_results/GNN_render/output_dynamic_gnn"
+prediction_dir = "./gaussian_splatting/output_dynamic"
 human_mask_path = (
-    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types_human_mask"
+    "./data/different_types_human_mask"
 )
 object_mask_path = (
-    "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/render_eval_data"
+    "./data/render_eval_data"
 )
 
 height, width = 480, 848
@@ -31,14 +32,14 @@ for dir_name in dir_names:
         # Process each camera
         fourcc = cv2.VideoWriter_fourcc(*"avc1")  # Codec for .mp4 file format
         video_writer = cv2.VideoWriter(
-            f"{prediction_dir}/render-{case_name}-model_50/{i}_integrate.mp4",
+            f"{prediction_dir}/{case_name}/{i}_integrate.mp4",
             fourcc,
             FPS,
             (width, height),
         )
 
         for frame_idx in range(frame_len):
-            render_path = f"{prediction_dir}/render-{case_name}-model_50/{i}/{frame_idx:05d}.png"
+            render_path = f"{prediction_dir}/{case_name}/{i}/{frame_idx:05d}.png"
             origin_image_path = f"{base_path}/{case_name}/color/{i}/{frame_idx}.png"
             human_mask_image_path = (
                 f"{human_mask_path}/{case_name}/mask/{i}/0/{frame_idx}.png"
