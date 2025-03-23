@@ -19,9 +19,19 @@ from pynput import keyboard
 from gaussian_splatting.scene.gaussian_model import GaussianModel
 from gaussian_splatting.scene.cameras import Camera
 from gaussian_splatting.gaussian_renderer import render as render_gaussian
-from gaussian_splatting.dynamic_utils import interpolate_motions_feng, interpolate_motions_feng_speedup, knn_weights, knn_weights_sparse, get_topk_indices, calc_weights_vals_from_indices
+from gaussian_splatting.dynamic_utils import (
+    interpolate_motions_feng,
+    interpolate_motions_feng_speedup,
+    knn_weights,
+    knn_weights_sparse,
+    get_topk_indices,
+    calc_weights_vals_from_indices,
+)
 from gaussian_splatting.utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
-from gs_render import remove_gaussians_with_low_opacity, remove_gaussians_with_point_mesh_distance
+from gs_render import (
+    remove_gaussians_with_low_opacity,
+    remove_gaussians_with_point_mesh_distance,
+)
 from gaussian_splatting.rotation_utils import quaternion_multiply, matrix_to_quaternion
 
 from sklearn.cluster import KMeans
@@ -741,7 +751,7 @@ class InvPhyTrainerWarp:
                 idx, change = self.key_mappings[key]
                 target_change[idx] += change
         return target_change
-    
+
     def init_control_ui(self):
 
         height = cfg.WH[1]
@@ -749,44 +759,52 @@ class InvPhyTrainerWarp:
 
         self.arrow_size = 30
 
-        self.arrow_fill_orig = cv2.imread("./assets/arrow_fill_v1.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
-        self.arrow_empty_orig = cv2.imread("./assets/arrow_empty.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
-        self.arrow_1_orig = cv2.imread("./assets/arrow_1.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
-        self.arrow_2_orig = cv2.imread("./assets/arrow_2.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
+        self.arrow_fill_orig = cv2.imread(
+            "./assets/arrow_fill_v1.png", cv2.IMREAD_UNCHANGED
+        )[:, :, [2, 1, 0, 3]]
+        self.arrow_empty_orig = cv2.imread(
+            "./assets/arrow_empty.png", cv2.IMREAD_UNCHANGED
+        )[:, :, [2, 1, 0, 3]]
+        self.arrow_1_orig = cv2.imread("./assets/arrow_1.png", cv2.IMREAD_UNCHANGED)[
+            :, :, [2, 1, 0, 3]
+        ]
+        self.arrow_2_orig = cv2.imread("./assets/arrow_2.png", cv2.IMREAD_UNCHANGED)[
+            :, :, [2, 1, 0, 3]
+        ]
 
         # self.arrow_fill = cv2.resize(self.arrow_fill_orig, (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA)
         # self.arrow_empty = cv2.resize(self.arrow_empty_orig, (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA)
         # self.arrow_1 = cv2.resize(self.arrow_1_orig, (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA)
-        # self.arrow_2 = cv2.resize(self.arrow_2_orig, (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA)        
+        # self.arrow_2 = cv2.resize(self.arrow_2_orig, (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA)
 
         spacing = self.arrow_size + 5
-    
+
         self.bottom_margin = 25  # Margin from bottom of screen
         bottom_y = height - self.bottom_margin
         top_y = height - self.bottom_margin - spacing
 
         self.edge_buffer = self.bottom_margin
-        set1_margin_x = self.edge_buffer                       # Add buffer from left edge
+        set1_margin_x = self.edge_buffer  # Add buffer from left edge
         set2_margin_x = width - self.edge_buffer
-        
+
         self.arrow_positions_set1 = {
-            "q": (set1_margin_x + spacing*3, top_y),    # Up
-            "w": (set1_margin_x + spacing, top_y),      # Forward
-            "a": (set1_margin_x, bottom_y),             # Left
-            "s": (set1_margin_x + spacing, bottom_y),   # Backward
-            "d": (set1_margin_x + spacing*2, bottom_y), # Right
-            "e": (set1_margin_x + spacing*3, bottom_y), # Down
+            "q": (set1_margin_x + spacing * 3, top_y),  # Up
+            "w": (set1_margin_x + spacing, top_y),  # Forward
+            "a": (set1_margin_x, bottom_y),  # Left
+            "s": (set1_margin_x + spacing, bottom_y),  # Backward
+            "d": (set1_margin_x + spacing * 2, bottom_y),  # Right
+            "e": (set1_margin_x + spacing * 3, bottom_y),  # Down
         }
-        
+
         self.arrow_positions_set2 = {
-            "u": (set2_margin_x - spacing*3, top_y),    # Up
-            "i": (set2_margin_x - spacing*1, top_y),    # Forward
-            "j": (set2_margin_x - spacing*2, bottom_y), # Left
-            "k": (set2_margin_x - spacing*1, bottom_y), # Backward
-            "l": (set2_margin_x, bottom_y),             # Right
-            "o": (set2_margin_x - spacing*3, bottom_y), # Down
+            "u": (set2_margin_x - spacing * 3, top_y),  # Up
+            "i": (set2_margin_x - spacing * 1, top_y),  # Forward
+            "j": (set2_margin_x - spacing * 2, bottom_y),  # Left
+            "k": (set2_margin_x - spacing * 1, bottom_y),  # Backward
+            "l": (set2_margin_x, bottom_y),  # Right
+            "o": (set2_margin_x - spacing * 3, bottom_y),  # Down
         }
-        
+
         # Create rotation matrices for each arrow
         # self.rotations = {
         #     "w": cv2.getRotationMatrix2D((self.arrow_size // 2, self.arrow_size // 2), 0, 1),   # Forward
@@ -805,22 +823,50 @@ class InvPhyTrainerWarp:
 
         self.interm_size = 512
         self.rotations = {
-            "w": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 0, 1),   # Forward
-            "a": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 90, 1),  # Left
-            "s": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 180, 1), # Backward
-            "d": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 270, 1), # Right
-            "q": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 0, 1),   # Up
-            "e": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 180, 1), # Down
-            "i": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 0, 1),   # Forward
-            "j": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 90, 1),  # Left
-            "k": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 180, 1), # Backward
-            "l": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 270, 1), # Right
-            "u": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 0, 1),   # Up
-            "o": cv2.getRotationMatrix2D((self.interm_size // 2, self.interm_size // 2), 180, 1), # Down
+            "w": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 0, 1
+            ),  # Forward
+            "a": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 90, 1
+            ),  # Left
+            "s": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 180, 1
+            ),  # Backward
+            "d": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 270, 1
+            ),  # Right
+            "q": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 0, 1
+            ),  # Up
+            "e": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 180, 1
+            ),  # Down
+            "i": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 0, 1
+            ),  # Forward
+            "j": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 90, 1
+            ),  # Left
+            "k": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 180, 1
+            ),  # Backward
+            "l": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 270, 1
+            ),  # Right
+            "u": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 0, 1
+            ),  # Up
+            "o": cv2.getRotationMatrix2D(
+                (self.interm_size // 2, self.interm_size // 2), 180, 1
+            ),  # Down
         }
 
-        self.hand_left = cv2.imread("./assets/Picture2.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
-        self.hand_right = cv2.imread("./assets/Picture1.png", cv2.IMREAD_UNCHANGED)[:, :, [2, 1, 0, 3]]
+        self.hand_left = cv2.imread("./assets/Picture2.png", cv2.IMREAD_UNCHANGED)[
+            :, :, [2, 1, 0, 3]
+        ]
+        self.hand_right = cv2.imread("./assets/Picture1.png", cv2.IMREAD_UNCHANGED)[
+            :, :, [2, 1, 0, 3]
+        ]
 
         self.hand_left_pos = torch.tensor([0.0, 0.0, 0.0], device=cfg.device)
         self.hand_right_pos = torch.tensor([0.0, 0.0, 0.0], device=cfg.device)
@@ -831,28 +877,52 @@ class InvPhyTrainerWarp:
         for key in self.arrow_positions_set1:
             self.arrow_rotated_filled[key] = cv2.resize(
                 self._rotate_arrow(
-                    cv2.resize(self.arrow_1_orig, (self.interm_size, self.interm_size), interpolation=cv2.INTER_AREA),
-                key), 
-                (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA
+                    cv2.resize(
+                        self.arrow_1_orig,
+                        (self.interm_size, self.interm_size),
+                        interpolation=cv2.INTER_AREA,
+                    ),
+                    key,
+                ),
+                (self.arrow_size, self.arrow_size),
+                interpolation=cv2.INTER_AREA,
             )
             self.arrow_rotated_empty[key] = cv2.resize(
                 self._rotate_arrow(
-                    cv2.resize(self.arrow_empty_orig, (self.interm_size, self.interm_size), interpolation=cv2.INTER_AREA),
-                key), 
-                (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA
+                    cv2.resize(
+                        self.arrow_empty_orig,
+                        (self.interm_size, self.interm_size),
+                        interpolation=cv2.INTER_AREA,
+                    ),
+                    key,
+                ),
+                (self.arrow_size, self.arrow_size),
+                interpolation=cv2.INTER_AREA,
             )
         for key in self.arrow_positions_set2:
             self.arrow_rotated_filled[key] = cv2.resize(
                 self._rotate_arrow(
-                    cv2.resize(self.arrow_2_orig, (self.interm_size, self.interm_size), interpolation=cv2.INTER_AREA),
-                key), 
-                (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA
+                    cv2.resize(
+                        self.arrow_2_orig,
+                        (self.interm_size, self.interm_size),
+                        interpolation=cv2.INTER_AREA,
+                    ),
+                    key,
+                ),
+                (self.arrow_size, self.arrow_size),
+                interpolation=cv2.INTER_AREA,
             )
             self.arrow_rotated_empty[key] = cv2.resize(
                 self._rotate_arrow(
-                    cv2.resize(self.arrow_empty_orig, (self.interm_size, self.interm_size), interpolation=cv2.INTER_AREA),
-                key), 
-                (self.arrow_size, self.arrow_size), interpolation=cv2.INTER_AREA
+                    cv2.resize(
+                        self.arrow_empty_orig,
+                        (self.interm_size, self.interm_size),
+                        interpolation=cv2.INTER_AREA,
+                    ),
+                    key,
+                ),
+                (self.arrow_size, self.arrow_size),
+                interpolation=cv2.INTER_AREA,
             )
 
     def _rotate_arrow(self, arrow, key):
@@ -862,7 +932,7 @@ class InvPhyTrainerWarp:
             rotation_matrix,
             (self.interm_size, self.interm_size),
             flags=cv2.INTER_LINEAR,
-            borderMode=cv2.BORDER_TRANSPARENT
+            borderMode=cv2.BORDER_TRANSPARENT,
         )
         return rotated
 
@@ -884,33 +954,35 @@ class InvPhyTrainerWarp:
             rotated_arrow = self.arrow_rotated_filled[key].copy()
         else:
             rotated_arrow = self.arrow_rotated_empty[key].copy()
-        
+
         h, w = rotated_arrow.shape[:2]
-        
+
         roi_x = max(0, x - w // 2)
         roi_y = max(0, y - h // 2)
         roi_w = min(w, background.shape[1] - roi_x)
         roi_h = min(h, background.shape[0] - roi_y)
-        
+
         arrow_x = max(0, w // 2 - x)
         arrow_y = max(0, h // 2 - y)
-        
-        roi = background[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
-        
-        arrow_roi = rotated_arrow[arrow_y:arrow_y+roi_h, arrow_x:arrow_x+roi_w]
-        
+
+        roi = background[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w]
+
+        arrow_roi = rotated_arrow[arrow_y : arrow_y + roi_h, arrow_x : arrow_x + roi_w]
+
         alpha = arrow_roi[:, :, 3] / 255.0
-        
+
         for c in range(3):  # Apply for RGB channels
             roi[:, :, c] = roi[:, :, c] * (1 - alpha) + arrow_roi[:, :, c] * alpha
-        
-        background[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w] = roi
-        
-        return background  
-    
-    def _overlay_hand_at_position(self, frame, target_points, x_axis, hand_size, hand_icon, align='center'):
+
+        background[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w] = roi
+
+        return background
+
+    def _overlay_hand_at_position(
+        self, frame, target_points, x_axis, hand_size, hand_icon, align="center"
+    ):
         result = frame.copy()
-        
+
         mean_pos = target_points.cpu().numpy().mean(axis=0)
 
         pixel_mean = self.projection @ np.append(mean_pos, 1)
@@ -919,56 +991,56 @@ class InvPhyTrainerWarp:
         pos_1 = np.append(mean_pos + hand_size * x_axis, 1)
         pixel_1 = self.projection @ pos_1
         pixel_1 = pixel_1[:2] / pixel_1[2]
-        
+
         pos_2 = np.append(mean_pos - hand_size * x_axis, 1)
         pixel_2 = self.projection @ pos_2
         pixel_2 = pixel_2[:2] / pixel_2[2]
-        
+
         icon_size = int(np.linalg.norm(pixel_1[:2] - pixel_2[:2]) / 2)
         icon_size = max(1, min(icon_size, 100))
 
         resized_icon = cv2.resize(hand_icon, (icon_size, icon_size))
         h, w = resized_icon.shape[:2]
         x, y = int(pixel_mean[0]), int(pixel_mean[1])
-        
-        if align == 'top-left':
+
+        if align == "top-left":
             roi_x = int(max(0, x - w * 0.15))
             roi_y = int(max(0, y - h * 0.1))
-        if align == 'top-right':
+        if align == "top-right":
             roi_x = int(max(0, x - w + w * 0.15))
             roi_y = int(max(0, y - h * 0.1))
-        if align == 'center':
+        if align == "center":
             roi_x = int(max(0, x - w // 2))
             roi_y = int(max(0, y - h // 2))
         roi_w = min(w, result.shape[1] - roi_x)
         roi_h = min(h, result.shape[0] - roi_y)
-        
+
         if roi_w <= 0 or roi_h <= 0:
             return result
-        
+
         icon_x = max(0, w // 2 - x)
         icon_y = max(0, h // 2 - y)
-        
-        roi = result[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w]
-        icon_roi = resized_icon[icon_y:icon_y+roi_h, icon_x:icon_x+roi_w]
-        
+
+        roi = result[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w]
+        icon_roi = resized_icon[icon_y : icon_y + roi_h, icon_x : icon_x + roi_w]
+
         if icon_roi.size == 0 or roi.shape[:2] != icon_roi.shape[:2]:
             return result
-        
+
         if icon_roi.shape[2] == 4:
             alpha = icon_roi[:, :, 3] / 255.0
             for c in range(3):
                 roi[:, :, c] = roi[:, :, c] * (1 - alpha) + icon_roi[:, :, c] * alpha
-            result[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w] = roi
+            result[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w] = roi
         else:
-            result[roi_y:roi_y+roi_h, roi_x:roi_x+roi_w] = icon_roi[:, :, :3]
+            result[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w] = icon_roi[:, :, :3]
 
         return result
 
     def _overlay_hand_icons(self, frame):
         if self.n_ctrl_parts not in [1, 2]:
             raise ValueError("Only support 1 or 2 control parts")
-        
+
         result = frame.copy()
 
         c2w = np.linalg.inv(self.w2c)
@@ -979,18 +1051,26 @@ class InvPhyTrainerWarp:
         if self.n_ctrl_parts == 1:
             current_target = self.hand_left_pos.unsqueeze(0)
             # align = 'top-right'
-            align = 'center'
-            result = self._overlay_hand_at_position(result, current_target, x_axis, hand_size, self.hand_left, align)
+            align = "center"
+            result = self._overlay_hand_at_position(
+                result, current_target, x_axis, hand_size, self.hand_left, align
+            )
         else:
             for i in range(2):
-                current_target = self.hand_left_pos.unsqueeze(0) if i == 0 else self.hand_right_pos.unsqueeze(0)
+                current_target = (
+                    self.hand_left_pos.unsqueeze(0)
+                    if i == 0
+                    else self.hand_right_pos.unsqueeze(0)
+                )
                 # align = 'top-right' if i == 0 else 'top-left'
-                align = 'center'
+                align = "center"
                 hand_icon = self.hand_left if i == 0 else self.hand_right
-                result = self._overlay_hand_at_position(result, current_target, x_axis, hand_size, hand_icon, align)
-                
+                result = self._overlay_hand_at_position(
+                    result, current_target, x_axis, hand_size, hand_icon, align
+                )
+
         return result
-    
+
     def update_frame(self, frame, pressed_keys):
         result = frame.copy()
 
@@ -1008,18 +1088,20 @@ class InvPhyTrainerWarp:
         if self.n_ctrl_parts == 2:
             bottom_right_pt1 = (cfg.WH[0] - trans_width, cfg.WH[1] - trans_height)
             bottom_right_pt2 = (cfg.WH[0], cfg.WH[1])
-            cv2.rectangle(overlay, bottom_right_pt1, bottom_right_pt2, (255, 255, 255), -1)
+            cv2.rectangle(
+                overlay, bottom_right_pt1, bottom_right_pt2, (255, 255, 255), -1
+            )
 
         alpha = 0.6
         cv2.addWeighted(overlay, alpha, result, 1 - alpha, 0, result)
-        
+
         # Draw all buttons for Set 1 (left side)
         for key, pos in self.arrow_positions_set1.items():
             if key in pressed_keys:
                 result = self._overlay_arrow(result, None, pos, key, filled=True)
             else:
                 result = self._overlay_arrow(result, None, pos, key, filled=False)
-        
+
         # Draw all buttons for Set 2 (right side)
         if self.n_ctrl_parts == 2:
             for key, pos in self.arrow_positions_set2.items():
@@ -1031,23 +1113,46 @@ class InvPhyTrainerWarp:
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.7
         thickness = 2
-        control1_x = self.edge_buffer                                 # hard coded for now
-        control2_x = cfg.WH[0] - self.edge_buffer - 113                    # hard coded for now
-        text_y = cfg.WH[1] - self.arrow_size*2 - self.bottom_margin - 10   # hard coded for now
-        cv2.putText(result, "Left Hand", (control1_x, text_y), font, font_scale, (0, 0, 0), thickness)
+        control1_x = self.edge_buffer  # hard coded for now
+        control2_x = cfg.WH[0] - self.edge_buffer - 113  # hard coded for now
+        text_y = (
+            cfg.WH[1] - self.arrow_size * 2 - self.bottom_margin - 10
+        )  # hard coded for now
+        cv2.putText(
+            result,
+            "Left Hand",
+            (control1_x, text_y),
+            font,
+            font_scale,
+            (0, 0, 0),
+            thickness,
+        )
         if self.n_ctrl_parts == 2:
-            cv2.putText(result, "Right Hand", (control2_x, text_y), font, font_scale, (0, 0, 0), thickness)
-        
+            cv2.putText(
+                result,
+                "Right Hand",
+                (control2_x, text_y),
+                font,
+                font_scale,
+                (0, 0, 0),
+                thickness,
+            )
+
         return result
-    
+
     def _find_closest_point(self, target_points):
         """Find the closest structure point to any of the target points."""
-        dist_matrix = torch.sum((target_points.unsqueeze(1) - self.structure_points.unsqueeze(0)) ** 2, dim=2)
+        dist_matrix = torch.sum(
+            (target_points.unsqueeze(1) - self.structure_points.unsqueeze(0)) ** 2,
+            dim=2,
+        )
         min_dist_per_ctrl_pts, min_indices = torch.min(dist_matrix, dim=1)
         min_idx = min_indices[torch.argmin(min_dist_per_ctrl_pts)]
         return self.structure_points[min_idx].unsqueeze(0)
 
-    def interactive_playground(self, model_path, gs_path, n_ctrl_parts=1, inv_ctrl=False):
+    def interactive_playground(
+        self, model_path, gs_path, n_ctrl_parts=1, inv_ctrl=False
+    ):
         # Load the model
         logger.info(f"Load model from {model_path}")
         checkpoint = torch.load(model_path, map_location=cfg.device)
@@ -1098,15 +1203,14 @@ class InvPhyTrainerWarp:
 
         vis_controller_points = current_target.cpu().numpy()
 
-
         gaussians = GaussianModel(sh_degree=3)
         gaussians.load_ply(gs_path)
         gaussians = remove_gaussians_with_low_opacity(gaussians, 0.1)
         gaussians.isotropic = True
         current_pos = gaussians.get_xyz
         current_rot = gaussians.get_rotation
-        use_white_background = True        # set to True for white background
-        bg_color = [1,1,1] if use_white_background else [0, 0, 0]
+        use_white_background = True  # set to True for white background
+        bg_color = [1, 1, 1] if use_white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
         view = self._create_gs_view(w2c, intrinsic, height, width)
         prev_x = None
@@ -1122,7 +1226,7 @@ class InvPhyTrainerWarp:
             N = vis_controller_points.shape[0]
             masks_ctrl_pts = []
             for i in range(n_ctrl_parts):
-                mask = (cluster_labels == i)
+                mask = cluster_labels == i
                 masks_ctrl_pts.append(torch.from_numpy(mask))
             # project the center of the cluster to the object to the image space, those on the left will be mask 1
             center1 = np.mean(vis_controller_points[masks_ctrl_pts[0]], axis=0)
@@ -1155,14 +1259,13 @@ class InvPhyTrainerWarp:
             "d": (0, np.array([0, 0.005, 0]) * self.inv_ctrl),
             "e": (0, np.array([0, 0, 0.005])),
             "q": (0, np.array([0, 0, -0.005])),
-            
             # Set 2 controls
             "i": (1, np.array([0.005, 0, 0]) * self.inv_ctrl),
             "k": (1, np.array([-0.005, 0, 0]) * self.inv_ctrl),
             "j": (1, np.array([0, -0.005, 0]) * self.inv_ctrl),
             "l": (1, np.array([0, 0.005, 0]) * self.inv_ctrl),
             "o": (1, np.array([0, 0, 0.005])),
-            "u": (1, np.array([0, 0, -0.005]))
+            "u": (1, np.array([0, 0, -0.005])),
         }
         self.pressed_keys = set()
         self.w2c = w2c
@@ -1171,14 +1274,14 @@ class InvPhyTrainerWarp:
         if n_ctrl_parts > 1:
             hand_positions = []
             for i in range(2):
-                target_points = torch.from_numpy(vis_controller_points[self.mask_ctrl_pts[i]]).to("cuda")
+                target_points = torch.from_numpy(
+                    vis_controller_points[self.mask_ctrl_pts[i]]
+                ).to("cuda")
                 hand_positions.append(self._find_closest_point(target_points))
             self.hand_left_pos, self.hand_right_pos = hand_positions
         else:
             target_points = torch.from_numpy(vis_controller_points).to("cuda")
             self.hand_left_pos = self._find_closest_point(target_points)
-            
-
 
         object_colors = self.object_colors.cpu().numpy()[0]
         if object_colors.shape[0] < vis_vertices.shape[0]:
@@ -1235,6 +1338,7 @@ class InvPhyTrainerWarp:
 
         ############## Temporary timer ##############
         import time
+
         class Timer:
             def __init__(self, name):
                 self.name = name
@@ -1243,7 +1347,7 @@ class InvPhyTrainerWarp:
                 self.cuda_start_event = None
                 self.cuda_end_event = None
                 self.use_cuda = torch.cuda.is_available()
-                
+
             def start(self):
                 if self.use_cuda:
                     torch.cuda.synchronize()
@@ -1251,16 +1355,18 @@ class InvPhyTrainerWarp:
                     self.cuda_end_event = torch.cuda.Event(enable_timing=True)
                     self.cuda_start_event.record()
                 self.start_time = time.time()
-                
+
             def stop(self):
                 if self.use_cuda:
                     self.cuda_end_event.record()
                     torch.cuda.synchronize()
-                    self.elapsed = self.cuda_start_event.elapsed_time(self.cuda_end_event) / 1000  # convert ms to seconds
+                    self.elapsed = (
+                        self.cuda_start_event.elapsed_time(self.cuda_end_event) / 1000
+                    )  # convert ms to seconds
                 else:
                     self.elapsed = time.time() - self.start_time
                 return self.elapsed
-            
+
             def reset(self):
                 self.elapsed = 0
                 self.start_time = None
@@ -1292,7 +1398,6 @@ class InvPhyTrainerWarp:
         frame_count = 0
 
         ############## End Temporary timer ##############
-
 
         while True:
 
@@ -1345,7 +1450,9 @@ class InvPhyTrainerWarp:
 
             frame = overlay.copy()
 
-            frame_setup_time = frame_timer.stop()  # We'll accumulate times for frame compositing
+            frame_setup_time = (
+                frame_timer.stop()
+            )  # We'll accumulate times for frame compositing
 
             torch.cuda.synchronize()
 
@@ -1404,7 +1511,9 @@ class InvPhyTrainerWarp:
             cv2.imshow("Interactive Playground", frame)
             cv2.waitKey(1)
 
-            frame_comp_time = frame_timer.stop() + frame_setup_time  # Total frame compositing time
+            frame_comp_time = (
+                frame_timer.stop() + frame_setup_time
+            )  # Total frame compositing time
             component_times["frame_compositing"].append(frame_comp_time)
 
             torch.cuda.synchronize()
@@ -1415,10 +1524,14 @@ class InvPhyTrainerWarp:
                 cur_particle_pos = x
 
                 if relations is None:
-                    relations = get_topk_indices(prev_x, K=16)                    # only computed in the first iteration
+                    relations = get_topk_indices(
+                        prev_x, K=16
+                    )  # only computed in the first iteration
 
                 if weights is None:
-                    weights, weights_indices = knn_weights_sparse(prev_particle_pos, current_pos, K=16)   # only computed in the first iteration
+                    weights, weights_indices = knn_weights_sparse(
+                        prev_particle_pos, current_pos, K=16
+                    )  # only computed in the first iteration
 
                 interp_timer.start()
 
@@ -1449,7 +1562,9 @@ class InvPhyTrainerWarp:
                     # knn_weights_time = knn_weights_timer.stop()
                     # component_times["knn_weights"].append(knn_weights_time)
 
-                    weights = calc_weights_vals_from_indices(prev_particle_pos, current_pos, weights_indices)
+                    weights = calc_weights_vals_from_indices(
+                        prev_particle_pos, current_pos, weights_indices
+                    )
 
                     current_pos, current_rot, _ = interpolate_motions_feng_speedup(
                         bones=prev_particle_pos,
@@ -1498,18 +1613,15 @@ class InvPhyTrainerWarp:
 
             # vis_controller_points = current_target.cpu().numpy()
 
-
-
-
             ############### Temporary timer ###############
             # Total loop time
             total_time = total_timer.stop()
             component_times["total"].append(total_time)
-            
+
             # Calculate FPS
             fps = 1.0 / total_time
             fps_history.append(fps)
-            
+
             # Display performance stats periodically
             frame_count += 1
             if frame_count % 10 == 0:
@@ -1518,70 +1630,105 @@ class InvPhyTrainerWarp:
                     fps_history = fps_history[-STATS_WINDOW:]
                     for key in component_times:
                         component_times[key] = component_times[key][-STATS_WINDOW:]
-                
+
                 avg_fps = np.mean(fps_history)
-                print(f"\n--- Performance Stats (avg over last {len(fps_history)} frames) ---")
+                print(
+                    f"\n--- Performance Stats (avg over last {len(fps_history)} frames) ---"
+                )
                 print(f"FPS: {avg_fps:.2f}")
-                
+
                 # Calculate percentages for pie chart
                 total_avg = np.mean(component_times["total"])
                 print(f"Total Frame Time: {total_avg*1000:.2f} ms")
-                
+
                 # Display individual component times
-                for key in ["simulator", "rendering", "frame_compositing", "full_motion_interpolation", "knn_weights", "motion_interp"]:
+                for key in [
+                    "simulator",
+                    "rendering",
+                    "frame_compositing",
+                    "full_motion_interpolation",
+                    "knn_weights",
+                    "motion_interp",
+                ]:
                     avg_time = np.mean(component_times[key])
                     percentage = (avg_time / total_avg) * 100
-                    print(f"{key.capitalize()}: {avg_time*1000:.2f} ms ({percentage:.1f}%)")
+                    print(
+                        f"{key.capitalize()}: {avg_time*1000:.2f} ms ({percentage:.1f}%)"
+                    )
 
         listener.stop()
 
-        
     def _transform_gs(self, gaussians, M, majority_scale=1):
 
         new_gaussians = copy.copy(gaussians)
 
         new_xyz = gaussians.get_xyz.clone()
-        ones = torch.ones((new_xyz.shape[0], 1), device=new_xyz.device, dtype=new_xyz.dtype)
+        ones = torch.ones(
+            (new_xyz.shape[0], 1), device=new_xyz.device, dtype=new_xyz.dtype
+        )
         new_xyz = torch.cat((new_xyz, ones), dim=1)
         print("inside:", new_xyz.max(), new_xyz.min())
         new_xyz = new_xyz @ M.T
         print("outside:", new_xyz.max(), new_xyz.min())
-        
+
         new_rotation = gaussians.get_rotation.clone()
-        new_rotation = quaternion_multiply(matrix_to_quaternion(M[:3, :3]), new_rotation)
-        
+        new_rotation = quaternion_multiply(
+            matrix_to_quaternion(M[:3, :3]), new_rotation
+        )
+
         new_scales = gaussians._scaling.clone()
-        new_scales += torch.log(torch.tensor(majority_scale, device=new_scales.device, dtype=new_scales.dtype))
-        
+        new_scales += torch.log(
+            torch.tensor(
+                majority_scale, device=new_scales.device, dtype=new_scales.dtype
+            )
+        )
+
         new_gaussians._xyz = new_xyz[:, :3]
         new_gaussians._rotation = new_rotation
         new_gaussians._scaling = new_scales
-        
+
         return new_gaussians
-    
+
     def _create_gs_view(self, w2c, intrinsic, height, width):
-        R = np.transpose(w2c[:3,:3])
+        R = np.transpose(w2c[:3, :3])
         T = w2c[:3, 3]
         K = torch.tensor(intrinsic, dtype=torch.float32, device="cuda")
         focal_length_x = K[0, 0]
         focal_length_y = K[1, 1]
         FovY = focal2fov(focal_length_y, height)
         FovX = focal2fov(focal_length_x, width)
-        view = Camera((width, height), colmap_id='0000', R=R, T=T, 
-                FoVx=FovX, FoVy=FovY, depth_params=None,
-                image=None, invdepthmap=None,
-                image_name='0000', uid='0000', data_device='cuda',
-                train_test_exp=None, is_test_dataset=None, is_test_view=None,
-                K=K, normal=None, depth=None, occ_mask=None)
+        view = Camera(
+            (width, height),
+            colmap_id="0000",
+            R=R,
+            T=T,
+            FoVx=FovX,
+            FoVy=FovY,
+            depth_params=None,
+            image=None,
+            invdepthmap=None,
+            image_name="0000",
+            uid="0000",
+            data_device="cuda",
+            train_test_exp=None,
+            is_test_dataset=None,
+            is_test_view=None,
+            K=K,
+            normal=None,
+            depth=None,
+            occ_mask=None,
+        )
         return view
 
     @staticmethod
-    def controller_update_thread(data_manager, controller_xyzs, controller_rots, image_dir=None):
+    def controller_update_thread(
+        data_manager, controller_xyzs, controller_rots, image_dir=None
+    ):
         """
         Thread function that updates controller pose using pre-recorded data.
         """
         num_frames = len(controller_xyzs)
-        
+
         for i in range(num_frames):
 
             xyz = controller_xyzs[i]
@@ -1595,23 +1742,25 @@ class InvPhyTrainerWarp:
                     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
             data_manager.update_controller_pose(xyz, rot, image)
-            
+
             # Sleep to simulate real-time data generation
             time.sleep(0.05)  # 20Hz update rate
-            
+
             if data_manager.done:
                 break
-                
+
         data_manager.set_done()
         print("Controller update thread finished")
 
-    def interactive_robot_teleop(self, gs_path, align_trans=None, align_transform=None, ctrl_pts_pos=None):
+    def interactive_robot_teleop(
+        self, gs_path, align_trans=None, align_transform=None, ctrl_pts_pos=None
+    ):
 
         logger.info("Robot Teleoperation Start!!!!")
         self.simulator.set_init_state(
             self.simulator.wp_init_vertices, self.simulator.wp_init_velocities
         )
-        
+
         # transform the gaussians (currently use rigid transform)
         gaussians = GaussianModel(sh_degree=3)
         gaussians.load_ply(gs_path)
@@ -1619,9 +1768,14 @@ class InvPhyTrainerWarp:
         gaussians.isotropic = True
         M = torch.eye(4).to(dtype=torch.float32, device="cuda")
         if align_trans is not None:
-            M[:3, 3] = torch.from_numpy(align_trans).to(dtype=torch.float32, device="cuda")
+            M[:3, 3] = torch.from_numpy(align_trans).to(
+                dtype=torch.float32, device="cuda"
+            )
         if align_transform is not None:
-            M = torch.from_numpy(align_transform).to(dtype=torch.float32, device="cuda") @ M
+            M = (
+                torch.from_numpy(align_transform).to(dtype=torch.float32, device="cuda")
+                @ M
+            )
         gaussians = self._transform_gs(gaussians, M)
         current_pos = gaussians.get_xyz
         current_rot = gaussians.get_rotation
@@ -1629,18 +1783,18 @@ class InvPhyTrainerWarp:
         relations = None
         weights = None
 
-        use_white_background = True        # set to True for white background
-        bg_color = [1,1,1] if use_white_background else [0, 0, 0]
+        use_white_background = True  # set to True for white background
+        bg_color = [1, 1, 1] if use_white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
         # pick one view to render
-        vis_cam_idx = 1   # 1, 2 has human involved
+        vis_cam_idx = 1  # 1, 2 has human involved
         FPS = cfg.FPS
         width, height = cfg.WH
         intrinsic = cfg.intrinsics[vis_cam_idx]
         w2c = cfg.w2cs[vis_cam_idx]
 
-        # create gs view 
+        # create gs view
         view = self._create_gs_view(w2c, intrinsic, height, width)
 
         # fetch the overlay image
@@ -1735,9 +1889,9 @@ class InvPhyTrainerWarp:
         image_dir = f"{cfg.episode_path}/camera_{vis_cam_idx}/rgb/"
         data_manager = ControllerDataManager()
         controller_thread = threading.Thread(
-            target=self.controller_update_thread, 
+            target=self.controller_update_thread,
             args=(data_manager, controller_xyzs, controller_rots, image_dir),
-            daemon=True  # ensure thread exits when main program exits
+            daemon=True,  # ensure thread exits when main program exits
         )
         controller_thread.start()
 
@@ -1779,7 +1933,7 @@ class InvPhyTrainerWarp:
             rgb = image[..., :3] * 255
             frame = alpha * rgb + (1 - alpha) * frame
             frame = frame.astype(np.uint8)
-            
+
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
             cv2.imshow("Interactive Playground", frame)
@@ -1788,7 +1942,7 @@ class InvPhyTrainerWarp:
             frames.append(frame)  # TODO: store frames for video demo
 
             if prev_x is not None:
-                
+
                 prev_particle_pos = prev_x
                 cur_particle_pos = x
 
@@ -1796,11 +1950,15 @@ class InvPhyTrainerWarp:
                 if relations is None:
                     relations = get_topk_indices(prev_x, K=16)
                 if weights is None:
-                    weights, weights_indices = knn_weights_sparse(prev_particle_pos, current_pos, K=16)
+                    weights, weights_indices = knn_weights_sparse(
+                        prev_particle_pos, current_pos, K=16
+                    )
 
                 with torch.no_grad():
 
-                    weights = calc_weights_vals_from_indices(prev_particle_pos, current_pos, weights_indices)
+                    weights = calc_weights_vals_from_indices(
+                        prev_particle_pos, current_pos, weights_indices
+                    )
 
                     current_pos, current_rot, _ = interpolate_motions_feng_speedup(
                         bones=prev_particle_pos,
@@ -1818,21 +1976,31 @@ class InvPhyTrainerWarp:
 
             prev_x = x.clone()
 
-            controller_xyz, controller_rot, new_overlay = data_manager.get_current_controller_data()
+            controller_xyz, controller_rot, new_overlay = (
+                data_manager.get_current_controller_data()
+            )
 
             if controller_xyz is not None and controller_rot is not None:
 
                 prev_target = current_target
-            
-                cur_controller_xyz = torch.tensor(controller_xyz, dtype=torch.float32).unsqueeze(0).to("cuda")
-                cur_controller_rot = torch.tensor(controller_rot, dtype=torch.float32).unsqueeze(0).to("cuda")
-                
+
+                cur_controller_xyz = (
+                    torch.tensor(controller_xyz, dtype=torch.float32)
+                    .unsqueeze(0)
+                    .to("cuda")
+                )
+                cur_controller_rot = (
+                    torch.tensor(controller_rot, dtype=torch.float32)
+                    .unsqueeze(0)
+                    .to("cuda")
+                )
+
                 current_target = torch.cat(
                     list(
-                        torch.einsum("gij,nj->gni", cur_controller_rot, ctrl_pts_pos) 
+                        torch.einsum("gij,nj->gni", cur_controller_rot, ctrl_pts_pos)
                         + cur_controller_xyz
-                    ), 
-                    dim=0
+                    ),
+                    dim=0,
                 )
 
                 if new_overlay is not None:
@@ -1840,11 +2008,10 @@ class InvPhyTrainerWarp:
 
         # TODO: save the frame for video demo
         episode_name = cfg.episode_path.split("/")[-1]
-        tmp_dir = f'./_tmp_teleop_frames/{episode_name}'
+        tmp_dir = f"./_tmp_teleop_frames/{episode_name}"
         os.makedirs(tmp_dir, exist_ok=True)
         for i, frame in enumerate(frames):
             cv2.imwrite(os.path.join(tmp_dir, f"frame_{i:06d}.png"), frame)
-
 
     def load_model_transfer(
         self, model_path, init_controller_points, final_points, action_num, dt=5e-5
@@ -2234,7 +2401,7 @@ class ControllerDataManager:
         self.image = None
         self.new_data_event = threading.Event()
         self.done = False
-    
+
     def update_controller_pose(self, xyz, rot, image=None):
         with self.lock:
             self.controller_xyz = xyz
@@ -2242,11 +2409,11 @@ class ControllerDataManager:
             if image is not None:
                 self.image = image
             self.new_data_event.set()
-    
+
     def get_current_controller_data(self):
         with self.lock:
             return self.controller_xyz, self.controller_rot, self.image
-    
+
     def set_done(self):
         with self.lock:
             self.done = True
