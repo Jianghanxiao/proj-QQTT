@@ -14,10 +14,11 @@ views=("0")
 #         "single_push_sloth"
 #         "weird_package")
 
-scenes=("cloth_blue_fold" "cloth_blue_lift" "cloth_pant_fold" "cloth_pant_lift" 
-        "cloth_red_fold" "cloth_red_lift" "cloth_shirt_fold" "cloth_shirt_lift" 
-        "cloth_skirt_1_fold" "cloth_skirt_1_lift" "cloth_skirt_2_fold")
+# scenes=("cloth_blue_fold" "cloth_blue_lift" "cloth_pant_fold" "cloth_pant_lift" 
+#         "cloth_red_fold" "cloth_red_lift" "cloth_shirt_fold" "cloth_shirt_lift" 
+#         "cloth_skirt_1_fold" "cloth_skirt_1_lift" "cloth_skirt_2_fold")
 
+scenes=("double_stretch_sloth")
 
 exp_name='init=hybrid_iso=True_ldepth=0.001_lnormal=0.0_laniso_0.0_lseg=1.0'
 

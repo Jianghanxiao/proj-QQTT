@@ -1,3 +1,5 @@
+combine*
+release_data/
 test.py
 wandb/
 experiments/
