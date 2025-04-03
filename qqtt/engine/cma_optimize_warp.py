@@ -216,7 +216,7 @@ class OptimizerCMA:
         init_collide_object_elas = cfg.collide_object_elas
         init_collide_object_fric = self.normalize(cfg.collide_object_fric, 0, 2)
         init_collision_dist = self.normalize(cfg.collision_dist, 0.01, 0.05)
-        init_drag_damping = self.normalize(cfg.drag_damping, 0, 10)
+        init_drag_damping = self.normalize(cfg.drag_damping, 0, 20)
         init_dashpot_damping = self.normalize(cfg.dashpot_damping, 0, 200)
 
         x_init = [
