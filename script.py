@@ -1,7 +1,7 @@
 import os
 import csv
 
-base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/more_clothes"
+base_path = "/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/phystwin_eval"
 
 os.system("rm -f timer.log")
 
@@ -13,9 +13,9 @@ with open("data_config.csv", newline="", encoding="utf-8") as csvfile:
         shape_prior = row[2]
         if shape_prior.lower() == "true":
             os.system(
-                f"python process_data.py --base_path {base_path} --case_name {case_name} --category {category} --shape_prior"
+                f"python process_data_eval.py --base_path {base_path} --case_name {case_name} --category {category} --shape_prior"
             )
         else:
             os.system(
-                f"python process_data.py --base_path {base_path} --case_name {case_name} --category {category}"
+                f"python process_data_eval.py --base_path {base_path} --case_name {case_name} --category {category}"
             )
