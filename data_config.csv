@@ -1,1 +1,2 @@
-rope_white,twine,True
+eval_rope_white_without_hand,twine,True
+eval_rope_white_hand,twine,True

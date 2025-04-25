@@ -19,11 +19,10 @@ args = parser.parse_args()
 
 # Set the debug flags
 PROCESS_SEG = False
-# PROCESS_SHAPE_PRIOR = True
 PROCESS_TRACK = False
 PROCESS_3D = False
-PROCESS_ALIGN = True
-PROCESS_FINAL = False
+PROCESS_ALIGN = False
+PROCESS_FINAL = True
 
 base_path = args.base_path
 case_name = args.case_name
@@ -36,19 +35,16 @@ logger = None
 
 
 def setup_logger(log_file="timer.log"):
-    global logger  # 声明全局变量
+    global logger
 
     if logger is None:
         logger = logging.getLogger("GlobalLogger")
         logger.setLevel(logging.INFO)
 
-        # 避免重复添加 handler
         if not logger.handlers:
-            # 创建文件 handler
             file_handler = logging.FileHandler(log_file)
             file_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
 
-            # 创建终端 handler
             console_handler = logging.StreamHandler()
             console_handler.setFormatter(logging.Formatter("%(message)s"))
 
@@ -89,36 +85,6 @@ if PROCESS_SEG:
         )
 
 # Directly use the shape prior with pre-scanning
-# if PROCESS_SHAPE_PRIOR and SHAPE_PRIOR:
-#     # Get the mask path for the image
-#     with open(f"{base_path}/{case_name}/mask/mask_info_{0}.json", "r") as f:
-#         data = json.load(f)
-#     obj_idx = None
-#     for key, value in data.items():
-#         if value != CONTROLLER_NAME:
-#             if obj_idx is not None:
-#                 raise ValueError("More than one object detected.")
-#             obj_idx = int(key)
-#     mask_path = f"{base_path}/{case_name}/mask/0/{obj_idx}/0.png"
-
-#     existDir(f"{base_path}/{case_name}/shape")
-#     # Get the high-resolution of the image to prepare for the trellis generation
-#     with Timer("Image Upscale"):
-#         os.system(
-#             f"python ./data_process/image_upscale.py --img_path {base_path}/{case_name}/color/0/0.png --mask_path {mask_path} --output_path {base_path}/{case_name}/shape/high_resolution.png --category {category}"
-#         )
-
-#     # Get the masked image of the object
-#     with Timer("Image Segmentation"):
-#         os.system(
-#             f"python ./data_process/segment_util_image.py --img_path {base_path}/{case_name}/shape/high_resolution.png --TEXT_PROMPT {category} --output_path {base_path}/{case_name}/shape/masked_image.png"
-#         )
-
-#     with Timer("Shape Prior Generation"):
-#         os.system(
-#             f"python ./data_process/shape_prior.py --img_path {base_path}/{case_name}/shape/masked_image.png --output_dir {base_path}/{case_name}/shape"
-#         )
-
 if PROCESS_TRACK:
     # Get the dense tracking of the object using Co-tracker
     with Timer("Dense Tracking"):
