@@ -9,7 +9,7 @@ parser = ArgumentParser()
 parser.add_argument(
     "--base_path",
     type=str,
-    default="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/different_types",
+    default="/home/hanxiao/Desktop/Research/proj-qqtt/proj-QQTT/data/feng_version",
 )
 parser.add_argument("--case_name", type=str, required=True)
 # The category of the object used for segmentation
@@ -18,12 +18,12 @@ parser.add_argument("--shape_prior", action="store_true", default=False)
 args = parser.parse_args()
 
 # Set the debug flags
-PROCESS_SEG = True
-PROCESS_SHAPE_PRIOR = True
-PROCESS_TRACK = True
+PROCESS_SEG = False
+PROCESS_SHAPE_PRIOR = False
+PROCESS_TRACK = False
 PROCESS_3D = True
-PROCESS_ALIGN = True
-PROCESS_FINAL = True
+PROCESS_ALIGN = False
+PROCESS_FINAL = False
 
 base_path = args.base_path
 case_name = args.case_name

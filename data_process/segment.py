@@ -21,6 +21,8 @@ assert len(glob.glob(f"{base_path}/{case_name}/depth/*")) == camera_num
 print(f"Processing {case_name}")
 
 for camera_idx in range(camera_num):
+    # if camera_idx != 1:
+    #     continue
     print(f"Processing {case_name} camera {camera_idx}")
     os.system(
         f"python ./data_process/segment_util_video.py --base_path {base_path} --case_name {case_name} --TEXT_PROMPT {TEXT_PROMPT} --camera_idx {camera_idx}"

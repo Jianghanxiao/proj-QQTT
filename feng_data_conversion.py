@@ -83,23 +83,23 @@ def main():
     parser.add_argument(
         "--input_path",
         type=str,
-        default="feng_data_collect/feng_rope_v3_0001",
+        default="feng_data_collect/feng_rope_v4_0002",
         help="Path to feng's data directory",
     )
     parser.add_argument(
-        "--output_path", type=str, default="past_data_collect", help="Output directory"
+        "--output_path", type=str, default="data/feng_version", help="Output directory"
     )
     parser.add_argument(
         "--case_name",
         type=str,
-        default="feng_rope_v3_0001",
+        default="feng_rope_v4_0002",
         help="Name for the converted case",
     )
     parser.add_argument(
-        "--start_frame", type=int, default=183, help="Start frame index"
+        "--start_frame", type=int, default=20, help="Start frame index"
     )
     parser.add_argument(
-        "--end_frame", type=int, default=830, help="End frame index (-1 for all frames)"
+        "--end_frame", type=int, default=360, help="End frame index (-1 for all frames)"
     )
 
     args = parser.parse_args()
