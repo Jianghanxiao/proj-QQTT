@@ -80,7 +80,7 @@ def getCamera(
 
     return meshes
 
-def getPcdFromDepth(depth, intrinsic_matrix):
+def getPcdFromDepth(depth, intrinsic):
     H, W = depth.shape
     x, y = np.meshgrid(np.arange(W), np.arange(H))
     x = x.reshape(-1)
@@ -88,7 +88,8 @@ def getPcdFromDepth(depth, intrinsic_matrix):
     depth = depth.reshape(-1)
     points = np.stack([x, y, np.ones_like(x)], axis=1)
     points = points * depth[:, None]
-    points = points @ np.linalg.inv(intrinsic_matrix).T
+    points = points @ np.linalg.inv(intrinsic).T
+    points = points.reshape(H, W, 3)
     return points
 
 def get_pcd_from_data(path, frame_idx, num_cam, intrinsics, c2ws):
@@ -103,9 +104,8 @@ def get_pcd_from_data(path, frame_idx, num_cam, intrinsics, c2ws):
 
         points = getPcdFromDepth(
             depth,
-            intrinsics[i],
+            intrinsic=intrinsics[i],
         )
-        points = points.reshape(depth.shape[0], depth.shape[1], 3)
         masks = np.logical_and(points[:, :, 2] > 0.2, points[:, :, 2] < 1.5)
         points_flat = points.reshape(-1, 3)
         # Transform points to world coordinates using homogeneous transformation
