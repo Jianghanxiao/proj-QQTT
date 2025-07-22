@@ -99,7 +99,7 @@ def main():
         "--start_frame", type=int, default=20, help="Start frame index"
     )
     parser.add_argument(
-        "--end_frame", type=int, default=360, help="End frame index (-1 for all frames)"
+        "--end_frame", type=int, default=290, help="End frame index (-1 for all frames)"
     )
 
     args = parser.parse_args()

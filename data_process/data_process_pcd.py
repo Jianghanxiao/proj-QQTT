@@ -80,38 +80,16 @@ def getCamera(
 
     return meshes
 
-
-# Use code from https://github.com/Jianghanxiao/Helper3D/blob/master/open3d_RGBD/src/model/pcdHelper.py
-def getPcdFromDepth(
-    depth,
-    intrinsic,
-):
-    # Depth in meters
-    height, width = np.shape(depth)
-
-    # Reshape the depth array to invert the depth values
-    depth = -depth
-
-    # Create a grid of (x, y) coordinates
-    x_coords = np.arange(width)
-    y_coords = np.arange(height)
-
-    # Create a meshgrid for x and y coordinates
-    X, Y = np.meshgrid(x_coords, y_coords)
-
-    # Calculate points using vectorized operations
-    old_points = np.stack([(width - X) * depth, Y * depth, depth], axis=-1)
-
-    # Flatten the old_points array and calculate the new points using matrix multiplication
-    points = np.dot(np.linalg.inv(intrinsic), old_points.reshape(-1, 3).T).T.reshape(
-        old_points.shape
-    )
-
-    points[:, :, 1] *= -1
-    points[:, :, 2] *= -1
-
+def getPcdFromDepth(depth, intrinsic_matrix):
+    H, W = depth.shape
+    x, y = np.meshgrid(np.arange(W), np.arange(H))
+    x = x.reshape(-1)
+    y = y.reshape(-1)
+    depth = depth.reshape(-1)
+    points = np.stack([x, y, np.ones_like(x)], axis=1)
+    points = points * depth[:, None]
+    points = points @ np.linalg.inv(intrinsic_matrix).T
     return points
-
 
 def get_pcd_from_data(path, frame_idx, num_cam, intrinsics, c2ws):
     total_points = []
@@ -125,8 +103,9 @@ def get_pcd_from_data(path, frame_idx, num_cam, intrinsics, c2ws):
 
         points = getPcdFromDepth(
             depth,
-            intrinsic=intrinsics[i],
+            intrinsics[i],
         )
+        points = points.reshape(depth.shape[0], depth.shape[1], 3)
         masks = np.logical_and(points[:, :, 2] > 0.2, points[:, :, 2] < 1.5)
         points_flat = points.reshape(-1, 3)
         # Transform points to world coordinates using homogeneous transformation
@@ -161,7 +140,8 @@ def get_pcd_from_data(path, frame_idx, num_cam, intrinsics, c2ws):
         
     # pcd.points = o3d.utility.Vector3dVector(np.concatenate(visualize_points).reshape(-1, 3))
     # pcd.colors = o3d.utility.Vector3dVector(np.concatenate(visualize_colors).reshape(-1, 3))
-    # o3d.visualization.draw_geometries([pcd])
+    # o3d.visualization.draw_geometries([pcd, coordinates])
+
     total_points = np.asarray(total_points)
     total_colors = np.asarray(total_colors)
     total_masks = np.asarray(total_masks)
