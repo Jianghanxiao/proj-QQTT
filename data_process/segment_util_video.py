@@ -125,6 +125,9 @@ class_names = labels
 
 print(input_boxes)
 
+del grounding_model
+torch.cuda.empty_cache()
+
 # prompt SAM image predictor to get the mask for the object
 image_predictor.set_image(image_source)
 
@@ -151,6 +154,9 @@ masks, scores, logits = image_predictor.predict(
 # convert the mask shape to (n, H, W)
 if masks.ndim == 4:
     masks = masks.squeeze(1)
+
+del image_predictor
+torch.cuda.empty_cache()
 
 """
 Step 3: Register each object's positive points to video predictor with seperate add_new_points call

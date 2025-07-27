@@ -21,7 +21,7 @@ assert len(glob.glob(f"{base_path}/{case_name}/depth/*")) == camera_num
 print(f"Processing {case_name}")
 
 for camera_idx in range(camera_num):
-    # if camera_idx != 1:
+    # if camera_idx != 2:
     #     continue
     print(f"Processing {case_name} camera {camera_idx}")
     os.system(

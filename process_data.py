@@ -21,9 +21,9 @@ args = parser.parse_args()
 PROCESS_SEG = False
 PROCESS_SHAPE_PRIOR = False
 PROCESS_TRACK = False
-PROCESS_3D = True
+PROCESS_3D = False
 PROCESS_ALIGN = False
-PROCESS_FINAL = False
+PROCESS_FINAL = True
 
 base_path = args.base_path
 case_name = args.case_name
